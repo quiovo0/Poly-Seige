@@ -49,6 +49,7 @@
   #click-to-play-overlay.hidden {
     opacity: 0;
     pointer-events: none;
+    visibility: hidden;
   }
 
   #game-title {
@@ -368,6 +369,13 @@
     cursor: pointer;
     text-align: center;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    /* Nested label divs are decorative; keep hits on the button itself */
+    pointer-events: auto;
+  }
+
+  .mode-card .mode-name,
+  .mode-card .mode-desc {
+    pointer-events: none;
   }
 
   .mode-card:hover {
@@ -442,6 +450,12 @@
     cursor: pointer;
     text-align: center;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+
+  .operator-card .operator-name,
+  .operator-card .operator-weapon,
+  .operator-card .operator-gadget {
+    pointer-events: none;
   }
 
   .operator-card:hover {
@@ -700,11 +714,11 @@
     <div id="game-title">POLY-SIEGE</div>
     <div id="game-subtitle">Operation Omega</div>
     <div id="mode-select-buttons">
-      <button class="mode-card" id="mode-online-button">
+      <button type="button" class="mode-card" id="mode-online-button">
         <div class="mode-name">ONLINE</div>
         <div class="mode-desc">Play against other players</div>
       </button>
-      <button class="mode-card" id="mode-bots-button">
+      <button type="button" class="mode-card" id="mode-bots-button">
         <div class="mode-name">VS BOTS</div>
         <div class="mode-desc">Play solo against AI defenders</div>
       </button>
@@ -725,17 +739,17 @@
     <div id="game-title">POLY-SIEGE</div>
     <div id="game-subtitle">Select Your Operator</div>
     <div id="operator-cards">
-      <button class="operator-card" data-operator="assault">
+      <button type="button" class="operator-card" data-operator="assault">
         <div class="operator-name">ASSAULT</div>
         <div class="operator-weapon">Rifle · 30 rounds</div>
         <div class="operator-gadget">Breaching Charge (F)</div>
       </button>
-      <button class="operator-card" data-operator="recon">
+      <button type="button" class="operator-card" data-operator="recon">
         <div class="operator-name">RECON</div>
         <div class="operator-weapon">SMG · 25 rounds</div>
         <div class="operator-gadget">Recon Drone (F)</div>
       </button>
-      <button class="operator-card" data-operator="support">
+      <button type="button" class="operator-card" data-operator="support">
         <div class="operator-name">SUPPORT</div>
         <div class="operator-weapon">Shotgun · 8 shells</div>
         <div class="operator-gadget">Deployable Shield (F)</div>
@@ -749,8 +763,8 @@
     <button id="round-restart-button" class="prompt-box">Play Again</button>
   </div>
 
-  <!-- Click-to-play overlay, shown before pointer lock is acquired -->
-  <div id="click-to-play-overlay">
+  <!-- Click-to-play overlay: hidden until a match is ready and pointer lock is needed -->
+  <div id="click-to-play-overlay" class="hidden">
     <div id="game-title">POLY-SIEGE</div>
     <div id="game-subtitle">Operation Omega</div>
     <div class="prompt-box">Click to Play</div>
@@ -1023,24 +1037,59 @@ sunLight.target.position.set(0, 0, -12);
 
 const clickToPlayOverlay = document.getElementById('click-to-play-overlay');
 const pauseOverlay = document.getElementById('pause-overlay');
+const mainMenuOverlay = document.getElementById('main-menu-overlay');
+const modeOnlineButton = document.getElementById('mode-online-button');
+const modeBotsButton = document.getElementById('mode-bots-button');
+const onlineUnavailablePanel = document.getElementById('online-unavailable-panel');
+const onlineBackButton = document.getElementById('online-back-button');
+const operatorSelectOverlay = document.getElementById('operator-select-overlay');
+const modeSelectButtons = document.getElementById('mode-select-buttons');
 
 let pointerIsLocked = false;
+// True once the player has picked an operator and left the menus. Used so
+// losing pointer lock mid-match shows Pause, while menu screens stay quiet.
+let gameStarted = false;
+// Declared early so pointer-lock handlers can read it before the round
+// system block below finishes initializing.
+let roundPhase = 'select'; // 'select' | 'prep' | 'action' | 'over'
 
 function requestGameLock() {
-  // Completely bypass pointer lock blockages in sandboxed iframes
-  const playOverlay = document.getElementById("click-to-play-overlay");
-  if (playOverlay) {
-    playOverlay.style.display = "none";
-    playOverlay.classList.add("hidden");
-  }
-  const pauseOverlay = document.getElementById("pause-overlay");
-  if (pauseOverlay) {
-    pauseOverlay.style.display = "none";
-    pauseOverlay.classList.add("hidden");
-  }
-  if (typeof isGamePaused !== "undefined") isGamePaused = false;
+  // Clear overlays first so a failed lock in a sandboxed iframe doesn't
+  // leave an invisible blocker sitting on top of the canvas.
+  clickToPlayOverlay.classList.add('hidden');
+  clickToPlayOverlay.style.display = '';
+  pauseOverlay.classList.remove('visible');
+  pauseOverlay.style.display = '';
 
-  canvas.requestPointerLock();
+  if (!canvas.requestPointerLock) {
+    console.error('Pointer Lock API is unavailable in this browser.');
+    showClickToPlayFallback();
+    return;
+  }
+  const lockPromise = canvas.requestPointerLock();
+  // Newer browsers return a Promise; reject → show click-to-play fallback.
+  if (lockPromise && typeof lockPromise.catch === 'function') {
+    lockPromise.catch((err) => {
+      console.error('Pointer lock request failed.', err);
+      showClickToPlayFallback();
+    });
+  }
+}
+
+function showClickToPlayFallback() {
+  if (!gameStarted) return;
+  pauseOverlay.classList.remove('visible');
+  pauseOverlay.style.display = '';
+  clickToPlayOverlay.style.display = '';
+  clickToPlayOverlay.classList.remove('hidden');
+}
+
+function isMenuScreenOpen() {
+  const mainOpen = mainMenuOverlay.style.display !== 'none' &&
+    getComputedStyle(mainMenuOverlay).display !== 'none';
+  const operatorOpen = operatorSelectOverlay.style.display === 'flex' ||
+    operatorSelectOverlay.classList.contains('visible');
+  return mainOpen || operatorOpen;
 }
 
 function onPointerLockChange() {
@@ -1048,16 +1097,21 @@ function onPointerLockChange() {
   if (pointerIsLocked) {
     clickToPlayOverlay.classList.add('hidden');
     pauseOverlay.classList.remove('visible');
-  } else {
-    // Lock was released (Esc, alt-tab, etc.) — show the pause overlay
-    // unless we're still on the very first click-to-play screen.
-    if (!clickToPlayOverlay.classList.contains('hidden')) return;
-    pauseOverlay.classList.add('visible');
+    return;
   }
+
+  // Still picking mode/operator — don't flash pause or click-to-play.
+  if (!gameStarted || isMenuScreenOpen() || roundPhase === 'select' || roundPhase === 'over') {
+    return;
+  }
+
+  // Lock released mid-match (Esc, alt-tab, etc.).
+  pauseOverlay.classList.add('visible');
 }
 
 function onPointerLockError() {
   console.error('Pointer lock request failed.');
+  showClickToPlayFallback();
 }
 
 clickToPlayOverlay.addEventListener('click', requestGameLock);
@@ -1067,23 +1121,33 @@ clickToPlayOverlay.addEventListener('click', requestGameLock);
 pauseOverlay.addEventListener('click', (event) => {
   if (event.target.closest('#settings-toggle-button, #settings-panel')) return;
   requestGameLock();
-  const pOverlay = document.getElementById('pause-overlay');
-  if (pOverlay) pOverlay.style.display = 'none';
-  const cOverlay = document.getElementById('click-to-play-overlay');
-  if (cOverlay) {
-    cOverlay.classList.add('hidden');
-    cOverlay.style.display = 'none';
-  }
-  const pOverlay = document.getElementById('pause-overlay');
-  if (pOverlay) pOverlay.style.display = 'none';
-  const cOverlay = document.getElementById('click-to-play-overlay');
-  if (cOverlay) {
-    cOverlay.classList.add('hidden');
-    cOverlay.style.display = 'none';
-  }
 });
 document.addEventListener('pointerlockchange', onPointerLockChange);
 document.addEventListener('pointerlockerror', onPointerLockError);
+
+// ---- Main menu wiring (early) ----
+// Attach as soon as overlays exist so mode buttons respond even if a later
+// systems init hiccups. Operator → match start is wired after round helpers.
+modeOnlineButton.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  modeSelectButtons.style.display = 'none';
+  onlineUnavailablePanel.classList.add('visible');
+});
+onlineBackButton.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  onlineUnavailablePanel.classList.remove('visible');
+  modeSelectButtons.style.display = 'flex';
+});
+modeBotsButton.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  mainMenuOverlay.style.display = 'none';
+  onlineUnavailablePanel.classList.remove('visible');
+  operatorSelectOverlay.style.display = 'flex';
+  operatorSelectOverlay.classList.add('visible');
+});
 
 // ---- Settings panel (mouse sensitivity, FOV, invert Y) ----
 const settingsToggleButton = document.getElementById('settings-toggle-button');
@@ -2687,7 +2751,6 @@ CONFIG.ROUND = {
   INTERACT_RANGE: 2.2, // how close the player must be to the site to plant
 };
 
-let roundPhase = 'select'; // 'select' | 'prep' | 'action' | 'over'
 let prepTimeRemaining = CONFIG.ROUND.PREP_DURATION;
 let roundResult = null; // 'attackers' | 'defenders'
 
@@ -2772,26 +2835,8 @@ function buildDroneModel() {
   return group;
 }
 
-// HUD elements this section drives.
-const mainMenuOverlay = document.getElementById('main-menu-overlay');
-const modeOnlineButton = document.getElementById('mode-online-button');
-const modeBotsButton = document.getElementById('mode-bots-button');
-const onlineUnavailablePanel = document.getElementById('online-unavailable-panel');
-const onlineBackButton = document.getElementById('online-back-button');
-const operatorSelectOverlay = document.getElementById('operator-select-overlay');
-
-// ---- Main menu: Online (unavailable — no backend in this standalone
-// build) vs Bots (the existing AI-defender game). ----
-modeOnlineButton.addEventListener('click', () => {
-  onlineUnavailablePanel.classList.add('visible');
-});
-onlineBackButton.addEventListener('click', () => {
-  onlineUnavailablePanel.classList.remove('visible');
-});
-modeBotsButton.addEventListener('click', () => {
-  mainMenuOverlay.style.display = 'none';
-  operatorSelectOverlay.style.display = 'flex';
-});
+// HUD elements this section drives. (Main-menu button refs + listeners are
+// wired earlier, next to pointer-lock setup, so mode select always responds.)
 const roundHudEl = document.getElementById('round-hud');
 const plantProgressContainer = document.getElementById('plant-progress-container');
 const plantProgressBar = document.getElementById('plant-progress-bar');
@@ -2816,12 +2861,31 @@ function applyOperatorLoadout(operatorKey) {
   despawnDrone();
 }
 
-document.querySelectorAll('.operator-card').forEach((card) => {
-  card.addEventListener('click', () => {
-    applyOperatorLoadout(card.dataset.operator);
-    operatorSelectOverlay.style.display = 'none';
-    startPrepPhase();
-  });
+// Leaves the menus and starts a match on the same user gesture as the
+// operator click — critical for pointer lock, which browsers only grant
+// inside a short-lived click handler.
+function beginMatch(operatorKey) {
+  if (!operatorKey || !CONFIG.OPERATORS[operatorKey]) return;
+
+  applyOperatorLoadout(operatorKey);
+  mainMenuOverlay.style.display = 'none';
+  operatorSelectOverlay.style.display = 'none';
+  operatorSelectOverlay.classList.remove('visible');
+  onlineUnavailablePanel.classList.remove('visible');
+  pauseOverlay.classList.remove('visible');
+  clickToPlayOverlay.classList.add('hidden');
+
+  gameStarted = true;
+  startPrepPhase();
+  requestGameLock();
+}
+
+// Event delegation so clicks on nested label divs still start the match.
+operatorSelectOverlay.addEventListener('click', (event) => {
+  const card = event.target.closest('.operator-card');
+  if (!card) return;
+  event.preventDefault();
+  beginMatch(card.dataset.operator);
 });
 
 // ---- Round flow ----
@@ -3290,7 +3354,11 @@ function resetRound() {
   roundOverOverlay.classList.remove('visible');
   roundPhase = 'select';
   roundResult = null;
+  gameStarted = false;
+  clickToPlayOverlay.classList.add('hidden');
+  pauseOverlay.classList.remove('visible');
   operatorSelectOverlay.style.display = 'flex';
+  operatorSelectOverlay.classList.add('visible');
 
   playerRig.position.copy(CONFIG.PLAYER_SPAWN);
   playerRig.rotation.y = 0;
@@ -3491,148 +3559,6 @@ window.addEventListener('resize', onWindowResize);
 
 // Kick off the loop.
 animate();
-</script>
-<script>
-document.addEventListener('click', function(e) {
-  const overlay = document.getElementById('click-to-play-overlay');
-  if (overlay && !overlay.classList.contains('hidden')) {
-    overlay.classList.add('hidden');
-    overlay.style.display = 'none';
-    const pauseOverlay = document.getElementById('pause-overlay');
-    if (pauseOverlay) pauseOverlay.style.display = 'none';
-    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
-  }
-});
-</script><script>
-document.addEventListener('click', function(e) {
-  const overlay = document.getElementById('click-to-play-overlay');
-  if (overlay && !overlay.classList.contains('hidden')) {
-    overlay.classList.add('hidden');
-    overlay.style.display = 'none';
-    const pauseOverlay = document.getElementById('pause-overlay');
-    if (pauseOverlay) pauseOverlay.style.display = 'none';
-    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
-  }
-});
-</script><script>
-document.addEventListener('DOMContentLoaded', () => {
-  const cleanAllBlockers = () => {
-    ['click-to-play-overlay', 'pause-overlay', 'blocker'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.style.display = 'none';
-        el.classList.add('hidden');
-        el.style.pointerEvents = 'none';
-      }
-    });
-  };
-  document.body.addEventListener('click', cleanAllBlockers, { once: true });
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const dismissAllMenus = () => {
-    const overlays = ['click-to-play-overlay', 'pause-overlay', 'blocker'];
-    overlays.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.style.display = 'none';
-        el.classList.add('hidden');
-        el.style.pointerEvents = 'none';
-      }
-    });
-    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
-  };
-
-  // Find all buttons on screen and bind them to start the game directly
-  document.querySelectorAll('button').forEach(btn => {
-    const text = btn.innerText.toLowerCase();
-    if (text.includes('bot') || text.includes('online') || text.includes('play') || text.includes('initialize') || text.includes('start')) {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        dismissAllMenus();
-      });
-    }
-  });
-});
-</script>
-
-<script>
-(function() {
-  const dismissAllMenus = () => {
-    console.log('Button clicked, dismissing menus...');
-    const overlays = ['click-to-play-overlay', 'pause-overlay', 'blocker'];
-    overlays.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.style.display = 'none';
-        el.classList.add('hidden');
-        el.style.pointerEvents = 'none';
-      }
-    });
-    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
-  };
-
-  // Check for buttons repeatedly until they are loaded, then bind them
-  const interval = setInterval(() => {
-    const buttons = document.querySelectorAll('button');
-    if (buttons.length > 0) {
-      buttons.forEach(btn => {
-        const text = btn.innerText.toLowerCase();
-        if (text.includes('bot') || text.includes('online') || text.includes('play') || text.includes('start')) {
-          btn.onclick = (e) => {
-            e.stopPropagation();
-            dismissAllMenus();
-          };
-        }
-      });
-      clearInterval(interval);
-    }
-  }, 100);
-})();
-</script>
-
-<script>
-(function() {
-  const forceStartGame = () => {
-    console.log("Direct launch triggered. Dismissing all menus!");
-    const overlays = [
-      'main-menu-overlay',
-      'click-to-play-overlay',
-      'pause-overlay',
-      'blocker',
-      'online-unavailable-panel'
-    ];
-    overlays.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.style.display = 'none';
-        el.style.visibility = 'hidden';
-        el.classList.add('hidden');
-        el.style.pointerEvents = 'none';
-      }
-    });
-    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
-  };
-
-  const interval = setInterval(() => {
-    const botsBtn = document.getElementById('mode-bots-button');
-    const onlineBtn = document.getElementById('mode-online-button');
-    if (botsBtn && onlineBtn) {
-      // Attach immediate force start to bypass the menu lock on both buttons
-      botsBtn.onclick = (e) => {
-        e.stopPropagation();
-        forceStartGame();
-      };
-      onlineBtn.onclick = (e) => {
-        e.stopPropagation();
-        forceStartGame();
-      };
-      console.log("Surgically bound click actions directly to VS Bots and Online buttons!");
-      clearInterval(interval);
-    }
-  }, 50);
-})();
 </script>
 </body>
 </html>
