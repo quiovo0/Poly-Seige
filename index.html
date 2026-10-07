@@ -3511,6 +3511,19 @@ window.addEventListener('resize', onWindowResize);
 
 // Kick off the loop.
 animate();
+
+// Dev helper so automated / console tests can fire without pointer-lock
+// mouse events (module scope otherwise hides these). No UI depends on it.
+window.__polySiegeTest = {
+  fire() {
+    currentAmmo = Math.max(currentAmmo, 1);
+    timeSinceLastShot = Infinity; // bypass RPM so console bursts spawn multiple tracers
+    fireWeapon();
+  },
+  melee() { useMelee(); },
+  get ammo() { return { current: currentAmmo, reserve: reserveAmmo }; },
+  get bullets() { return activeBullets.length; },
+};
 </script>
 </body>
 </html>
