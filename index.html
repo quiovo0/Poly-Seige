@@ -827,8 +827,9 @@ const CONFIG = {
     RECOIL_KICK: 0.018, // radians added to pitch per shot
     HORIZONTAL_SWAY: 0.008, // max radians of random yaw kick per shot
     RECOIL_RECOVERY_RATE: 6, // how fast recoil decays back to zero, per second
-    BULLET_SPEED: 55, // units/sec the visible bullet mesh travels — slow enough to actually see in flight
-    BULLET_RADIUS: 0.03,
+    BULLET_SPEED: 40, // units/sec the visible tracer travels — slow enough to read in flight
+    BULLET_RADIUS: 0.025,
+    BULLET_LENGTH: 0.22, // elongated tracer streak so short-range shots still read clearly
     MUZZLE_FLASH_DURATION: 0.05, // seconds the muzzle flash plane stays visible
     ADS_SENSITIVITY_MULTIPLIER: 0.5, // mouse slows down while aiming
     ADS_RECOIL_MULTIPLIER: 0.5, // tighter recoil while aiming
@@ -839,7 +840,7 @@ const CONFIG = {
     RELOAD_DIP_ANGLE: THREE.MathUtils.degToRad(28), // how far the gun tips down/forward during reload
     RELOAD_DIP_HEIGHT: 0.07, // how far the gun drops during reload
     RELOAD_MAGAZINE_DROP: 0.22, // how far the magazine slides out before the "new" one slides back in
-    MELEE_DURATION: 0.38, // seconds the knife swing animation lasts
+    MELEE_DURATION: 0.45, // seconds the knife swing animation lasts
     MELEE_GUN_TUCK: 0.22, // how far the rifle tucks down/back while the knife is out
   },
 };
@@ -1596,22 +1597,32 @@ const SCREEN_CENTER = new THREE.Vector2(0, 0);
 // standing still and firing at something in the distance.
 const activeBullets = [];
 const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffcc66 });
-const bulletGeometry = new THREE.SphereGeometry(CONFIG.WEAPON.BULLET_RADIUS, 6, 6);
+// Elongated capsule oriented along +Y; each tracer is rotated to face its
+// flight direction so even brief close-range shots read as a streak.
+const bulletGeometry = new THREE.CapsuleGeometry(
+  CONFIG.WEAPON.BULLET_RADIUS,
+  CONFIG.WEAPON.BULLET_LENGTH,
+  2,
+  6
+);
+const _bulletUp = new THREE.Vector3(0, 1, 0);
 
-// Spawns a small glowing sphere at origin that travels in `direction` for
+// Spawns a tracer streak at origin that travels in `direction` for
 // `totalDistance` at BULLET_SPEED, removing itself on arrival. Purely
 // visual — the actual hit was already resolved instantly via raycast.
 // Passing an explicit direction (instead of deriving it from a target
 // point) keeps tracers perfectly straight along the fired ray.
 function spawnBullet(origin, direction, totalDistance) {
   const travel = Math.max(0.01, totalDistance);
+  const dir = direction.clone().normalize();
   const mesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
   mesh.position.copy(origin);
+  mesh.quaternion.setFromUnitVectors(_bulletUp, dir);
   scene.add(mesh);
   activeBullets.push({
     mesh,
     origin: origin.clone(),
-    direction: direction.clone().normalize(),
+    direction: dir,
     totalDistance: travel,
     traveled: 0,
   });
