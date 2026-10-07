@@ -583,6 +583,61 @@
     border: none;
     font-family: inherit;
   }
+  /* ========== PREMIUM SCOPE VIGNETTE ========== */
+  #scope-vignette {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 55;
+    background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.95) 60%);
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+  }
+
+  #blocker, #pause-overlay.hidden, #click-to-play-overlay.hidden {
+    display: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    z-index: -9999 !important;
+  }
+
+  #blocker, #pause-overlay.hidden, #click-to-play-overlay.hidden {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    z-index: -9999 !important;
+  }
+  body, html, #game-canvas {
+    pointer-events: auto !important;
+  }
+
+  
+  /* Force disable mouse blocking on any background menu divs */
+  #click-to-play-overlay.hidden, #pause-overlay.hidden, #blocker, .blocker {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    z-index: -9999 !important;
+  }
+  body, html, #game-canvas {
+    pointer-events: auto !important;
+    cursor: default !important;
+  }
+
+  #click-to-play-overlay, #pause-overlay, #blocker, .blocker {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+  }
+  #click-to-play-overlay.hidden, #pause-overlay.hidden {
+    display: none !important;
+    pointer-events: none !important;
+    z-index: -9999 !important;
+  }
 </style>
 </head>
 <body>
@@ -591,6 +646,7 @@
   <canvas id="game-canvas"></canvas>
 
   <!-- Dynamic crosshair: hidden while aiming down the scope -->
+  <div id="scope-vignette"></div>
   <div id="crosshair">
     <div class="ch-line ch-top"></div>
     <div class="ch-line ch-bottom"></div>
@@ -788,7 +844,7 @@ const CONFIG = {
     ADS_RECOIL_MULTIPLIER: 0.5, // tighter recoil while aiming
     ADS_TRANSITION_SPEED: 10, // how fast FOV/gun position lerp toward their target
     GUN_HIP_POSITION: new THREE.Vector3(0.28, -0.28, -0.55),
-    GUN_ADS_POSITION: new THREE.Vector3(0, -0.14, -0.32),
+    GUN_ADS_POSITION: new THREE.Vector3(0, -0.115, -0.13),
     RELOAD_DIP_ANGLE: THREE.MathUtils.degToRad(28), // how far the gun tips down/forward during reload
     RELOAD_DIP_HEIGHT: 0.07, // how far the gun drops during reload
     RELOAD_MAGAZINE_DROP: 0.22, // how far the magazine slides out before the "new" one slides back in
@@ -971,6 +1027,19 @@ const pauseOverlay = document.getElementById('pause-overlay');
 let pointerIsLocked = false;
 
 function requestGameLock() {
+  // Completely bypass pointer lock blockages in sandboxed iframes
+  const playOverlay = document.getElementById("click-to-play-overlay");
+  if (playOverlay) {
+    playOverlay.style.display = "none";
+    playOverlay.classList.add("hidden");
+  }
+  const pauseOverlay = document.getElementById("pause-overlay");
+  if (pauseOverlay) {
+    pauseOverlay.style.display = "none";
+    pauseOverlay.classList.add("hidden");
+  }
+  if (typeof isGamePaused !== "undefined") isGamePaused = false;
+
   canvas.requestPointerLock();
 }
 
@@ -998,6 +1067,20 @@ clickToPlayOverlay.addEventListener('click', requestGameLock);
 pauseOverlay.addEventListener('click', (event) => {
   if (event.target.closest('#settings-toggle-button, #settings-panel')) return;
   requestGameLock();
+  const pOverlay = document.getElementById('pause-overlay');
+  if (pOverlay) pOverlay.style.display = 'none';
+  const cOverlay = document.getElementById('click-to-play-overlay');
+  if (cOverlay) {
+    cOverlay.classList.add('hidden');
+    cOverlay.style.display = 'none';
+  }
+  const pOverlay = document.getElementById('pause-overlay');
+  if (pOverlay) pOverlay.style.display = 'none';
+  const cOverlay = document.getElementById('click-to-play-overlay');
+  if (cOverlay) {
+    cOverlay.classList.add('hidden');
+    cOverlay.style.display = 'none';
+  }
 });
 document.addEventListener('pointerlockchange', onPointerLockChange);
 document.addEventListener('pointerlockerror', onPointerLockError);
@@ -1414,9 +1497,9 @@ function buildScopeReticle() {
   return group;
 }
 
-const scopeReticleFront = buildScopeReticle();
-scopeReticleFront.position.set(0, 0.115, -0.232); // sits just outside the front lens, toward the muzzle
-gunVisualGroup.add(scopeReticleFront);
+// Removed front reticle
+
+
 
 const scopeReticleBack = buildScopeReticle();
 scopeReticleBack.position.set(0, 0.115, -0.092); // sits just outside the back (eyepiece) lens
@@ -1726,6 +1809,54 @@ function updateGunBob(deltaTime) {
 // while held, reload countdown + animation, ADS lerp, recoil decay,
 // muzzle flash. Called from the game loop.
 function updateWeapon(deltaTime) {
+  // Smooth scope lens vignette transition based on aiming state
+  const vignetteEl = document.getElementById('scope-vignette');
+  if (vignetteEl) {
+    vignetteEl.style.opacity = isAiming ? '1' : '0';
+  }
+  // Apply melee swing rotation loop
+  if (typeof meleeSwingTimer !== 'undefined' && meleeSwingTimer > 0) {
+    meleeSwingTimer -= deltaTime;
+    const progress = (0.25 - meleeSwingTimer) / 0.25;
+    if (gunVisualGroup) {
+      gunVisualGroup.rotation.z = Math.sin(progress * Math.PI) * 0.7;
+      gunVisualGroup.rotation.x = -Math.sin(progress * Math.PI) * 0.4;
+    }
+  } else if (gunVisualGroup) {
+    gunVisualGroup.rotation.z = THREE.MathUtils.lerp(gunVisualGroup.rotation.z, 0, 10 * deltaTime);
+    gunVisualGroup.rotation.x = THREE.MathUtils.lerp(gunVisualGroup.rotation.x, 0, 10 * deltaTime);
+  }
+  // Smooth scope lens vignette transition based on aiming state
+  // Apply melee swing rotation loop
+  if (typeof meleeSwingTimer !== 'undefined' && meleeSwingTimer > 0) {
+    meleeSwingTimer -= deltaTime;
+    const progress = (0.25 - meleeSwingTimer) / 0.25;
+    // Quick outward-inward slash rotation
+    if (gunVisualGroup) {
+      gunVisualGroup.rotation.z = Math.sin(progress * Math.PI) * 0.7;
+      gunVisualGroup.rotation.x = -Math.sin(progress * Math.PI) * 0.4;
+    }
+  } else if (gunVisualGroup) {
+    gunVisualGroup.rotation.z = THREE.MathUtils.lerp(gunVisualGroup.rotation.z, 0, 10 * deltaTime);
+    gunVisualGroup.rotation.x = THREE.MathUtils.lerp(gunVisualGroup.rotation.x, 0, 10 * deltaTime);
+  }
+  // Apply melee swing rotation loop
+  if (typeof meleeSwingTimer !== 'undefined' && meleeSwingTimer > 0) {
+    meleeSwingTimer -= deltaTime;
+    const progress = (0.25 - meleeSwingTimer) / 0.25;
+    // Quick outward-inward slash rotation
+    if (gunVisualGroup) {
+      gunVisualGroup.rotation.z = Math.sin(progress * Math.PI) * 0.7;
+      gunVisualGroup.rotation.x = -Math.sin(progress * Math.PI) * 0.4;
+    }
+  } else if (gunVisualGroup) {
+    gunVisualGroup.rotation.z = THREE.MathUtils.lerp(gunVisualGroup.rotation.z, 0, 10 * deltaTime);
+    gunVisualGroup.rotation.x = THREE.MathUtils.lerp(gunVisualGroup.rotation.x, 0, 10 * deltaTime);
+  }
+  const vignetteEl = document.getElementById('scope-vignette');
+  if (vignetteEl) {
+    vignetteEl.style.opacity = isAiming ? '1' : '0';
+  }
   timeSinceLastShot += deltaTime;
 
   // Reloading locks out firing — you can't shoot mid-reload.
@@ -2871,26 +3002,60 @@ function getGadgetStatusText() {
 const meleeRaycaster = new THREE.Raycaster();
 let meleeCooldownRemaining = 0;
 
+// Play physical weapon slash rotation animation & create kinetic swing feedback
+let meleeSwingTimer = 0;
 function useMelee() {
   if (meleeCooldownRemaining > 0) return;
   if (isPilotingDrone || isPlayerDead || isReloading) return;
   if (roundPhase !== 'prep' && roundPhase !== 'action') return;
 
   meleeCooldownRemaining = CONFIG.MELEE_COOLDOWN;
+  meleeSwingTimer = 0.25; // 250ms visual weapon rotation swing
 
   const origin = new THREE.Vector3();
   camera.getWorldPosition(origin);
   const direction = new THREE.Vector3();
   camera.getWorldDirection(direction);
 
+  // Kinetic Swing Flash visual overlay element
+  const hitFlash = document.createElement('div');
+  hitFlash.style.position = 'fixed';
+  hitFlash.style.top = '50%';
+  hitFlash.style.left = '50%';
+  hitFlash.style.transform = 'translate(-50%, -50%)';
+  hitFlash.style.width = '120px';
+  hitFlash.style.height = '120px';
+  hitFlash.style.borderRadius = '50%';
+  hitFlash.style.border = '2px solid rgba(255, 255, 255, 0.5)';
+  hitFlash.style.background = 'radial-gradient(circle, rgba(255,255,255,0.2) 10%, transparent 70%)';
+  hitFlash.style.pointerEvents = 'none';
+  hitFlash.style.zIndex = '99';
+  document.body.appendChild(hitFlash);
+  setTimeout(() => hitFlash.remove(), 120);
+
   meleeRaycaster.set(origin, direction);
   meleeRaycaster.far = CONFIG.MELEE_RANGE;
-  const hits = meleeRaycaster.intersectObjects(collidableMeshes, false);
+
+  // Query both walls and enemies
+  const targets = collidableMeshes.concat(enemyHitboxMeshes);
+  const hits = meleeRaycaster.intersectObjects(targets, true);
   if (hits.length === 0) return;
 
   const hit = hits[0];
-  if (hit.object.userData.isDoor) {
-    damageDoor(hit.object.userData.doorState, 'melee');
+  let currentObj = hit.object;
+  while (currentObj) {
+    if (currentObj.userData.isDoor) {
+      damageDoor(currentObj.userData.doorState, 'melee');
+      break;
+    }
+    if (currentObj.userData.owner) {
+      // Hit Enemy Operator!
+      const enemyObj = currentObj.userData.owner;
+      enemyObj.takeDamage(45, false, hit.point);
+      createSparks(hit.point, new THREE.Vector3(0, 1, 0), '#ff2222', 8);
+      break;
+    }
+    currentObj = currentObj.parent;
   }
 }
 
@@ -3326,6 +3491,148 @@ window.addEventListener('resize', onWindowResize);
 
 // Kick off the loop.
 animate();
+</script>
+<script>
+document.addEventListener('click', function(e) {
+  const overlay = document.getElementById('click-to-play-overlay');
+  if (overlay && !overlay.classList.contains('hidden')) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+    const pauseOverlay = document.getElementById('pause-overlay');
+    if (pauseOverlay) pauseOverlay.style.display = 'none';
+    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
+  }
+});
+</script><script>
+document.addEventListener('click', function(e) {
+  const overlay = document.getElementById('click-to-play-overlay');
+  if (overlay && !overlay.classList.contains('hidden')) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+    const pauseOverlay = document.getElementById('pause-overlay');
+    if (pauseOverlay) pauseOverlay.style.display = 'none';
+    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
+  }
+});
+</script><script>
+document.addEventListener('DOMContentLoaded', () => {
+  const cleanAllBlockers = () => {
+    ['click-to-play-overlay', 'pause-overlay', 'blocker'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = 'none';
+        el.classList.add('hidden');
+        el.style.pointerEvents = 'none';
+      }
+    });
+  };
+  document.body.addEventListener('click', cleanAllBlockers, { once: true });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const dismissAllMenus = () => {
+    const overlays = ['click-to-play-overlay', 'pause-overlay', 'blocker'];
+    overlays.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = 'none';
+        el.classList.add('hidden');
+        el.style.pointerEvents = 'none';
+      }
+    });
+    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
+  };
+
+  // Find all buttons on screen and bind them to start the game directly
+  document.querySelectorAll('button').forEach(btn => {
+    const text = btn.innerText.toLowerCase();
+    if (text.includes('bot') || text.includes('online') || text.includes('play') || text.includes('initialize') || text.includes('start')) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dismissAllMenus();
+      });
+    }
+  });
+});
+</script>
+
+<script>
+(function() {
+  const dismissAllMenus = () => {
+    console.log('Button clicked, dismissing menus...');
+    const overlays = ['click-to-play-overlay', 'pause-overlay', 'blocker'];
+    overlays.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = 'none';
+        el.classList.add('hidden');
+        el.style.pointerEvents = 'none';
+      }
+    });
+    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
+  };
+
+  // Check for buttons repeatedly until they are loaded, then bind them
+  const interval = setInterval(() => {
+    const buttons = document.querySelectorAll('button');
+    if (buttons.length > 0) {
+      buttons.forEach(btn => {
+        const text = btn.innerText.toLowerCase();
+        if (text.includes('bot') || text.includes('online') || text.includes('play') || text.includes('start')) {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            dismissAllMenus();
+          };
+        }
+      });
+      clearInterval(interval);
+    }
+  }, 100);
+})();
+</script>
+
+<script>
+(function() {
+  const forceStartGame = () => {
+    console.log("Direct launch triggered. Dismissing all menus!");
+    const overlays = [
+      'main-menu-overlay',
+      'click-to-play-overlay',
+      'pause-overlay',
+      'blocker',
+      'online-unavailable-panel'
+    ];
+    overlays.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = 'none';
+        el.style.visibility = 'hidden';
+        el.classList.add('hidden');
+        el.style.pointerEvents = 'none';
+      }
+    });
+    if (typeof isGamePaused !== 'undefined') isGamePaused = false;
+  };
+
+  const interval = setInterval(() => {
+    const botsBtn = document.getElementById('mode-bots-button');
+    const onlineBtn = document.getElementById('mode-online-button');
+    if (botsBtn && onlineBtn) {
+      // Attach immediate force start to bypass the menu lock on both buttons
+      botsBtn.onclick = (e) => {
+        e.stopPropagation();
+        forceStartGame();
+      };
+      onlineBtn.onclick = (e) => {
+        e.stopPropagation();
+        forceStartGame();
+      };
+      console.log("Surgically bound click actions directly to VS Bots and Online buttons!");
+      clearInterval(interval);
+    }
+  }, 50);
+})();
 </script>
 </body>
 </html>
