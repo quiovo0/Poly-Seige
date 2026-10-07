@@ -49,7 +49,6 @@
   #click-to-play-overlay.hidden {
     opacity: 0;
     pointer-events: none;
-    visibility: hidden;
   }
 
   #game-title {
@@ -369,13 +368,6 @@
     cursor: pointer;
     text-align: center;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-    /* Nested label divs are decorative; keep hits on the button itself */
-    pointer-events: auto;
-  }
-
-  .mode-card .mode-name,
-  .mode-card .mode-desc {
-    pointer-events: none;
   }
 
   .mode-card:hover {
@@ -450,12 +442,6 @@
     cursor: pointer;
     text-align: center;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-  }
-
-  .operator-card .operator-name,
-  .operator-card .operator-weapon,
-  .operator-card .operator-gadget {
-    pointer-events: none;
   }
 
   .operator-card:hover {
@@ -597,61 +583,6 @@
     border: none;
     font-family: inherit;
   }
-  /* ========== PREMIUM SCOPE VIGNETTE ========== */
-  #scope-vignette {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 55;
-    background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.95) 60%);
-    opacity: 0;
-    transition: opacity 0.15s ease-in-out;
-  }
-
-  #blocker, #pause-overlay.hidden, #click-to-play-overlay.hidden {
-    display: none !important;
-    pointer-events: none !important;
-    opacity: 0 !important;
-    z-index: -9999 !important;
-  }
-
-  #blocker, #pause-overlay.hidden, #click-to-play-overlay.hidden {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-    opacity: 0 !important;
-    z-index: -9999 !important;
-  }
-  body, html, #game-canvas {
-    pointer-events: auto !important;
-  }
-
-  
-  /* Force disable mouse blocking on any background menu divs */
-  #click-to-play-overlay.hidden, #pause-overlay.hidden, #blocker, .blocker {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-    opacity: 0 !important;
-    z-index: -9999 !important;
-  }
-  body, html, #game-canvas {
-    pointer-events: auto !important;
-    cursor: default !important;
-  }
-
-  #click-to-play-overlay, #pause-overlay, #blocker, .blocker {
-    cursor: pointer !important;
-    pointer-events: auto !important;
-  }
-  #click-to-play-overlay.hidden, #pause-overlay.hidden {
-    display: none !important;
-    pointer-events: none !important;
-    z-index: -9999 !important;
-  }
 </style>
 </head>
 <body>
@@ -660,7 +591,6 @@
   <canvas id="game-canvas"></canvas>
 
   <!-- Dynamic crosshair: hidden while aiming down the scope -->
-  <div id="scope-vignette"></div>
   <div id="crosshair">
     <div class="ch-line ch-top"></div>
     <div class="ch-line ch-bottom"></div>
@@ -714,11 +644,11 @@
     <div id="game-title">POLY-SIEGE</div>
     <div id="game-subtitle">Operation Omega</div>
     <div id="mode-select-buttons">
-      <button type="button" class="mode-card" id="mode-online-button">
+      <button class="mode-card" id="mode-online-button">
         <div class="mode-name">ONLINE</div>
         <div class="mode-desc">Play against other players</div>
       </button>
-      <button type="button" class="mode-card" id="mode-bots-button">
+      <button class="mode-card" id="mode-bots-button">
         <div class="mode-name">VS BOTS</div>
         <div class="mode-desc">Play solo against AI defenders</div>
       </button>
@@ -739,17 +669,17 @@
     <div id="game-title">POLY-SIEGE</div>
     <div id="game-subtitle">Select Your Operator</div>
     <div id="operator-cards">
-      <button type="button" class="operator-card" data-operator="assault">
+      <button class="operator-card" data-operator="assault">
         <div class="operator-name">ASSAULT</div>
         <div class="operator-weapon">Rifle · 30 rounds</div>
         <div class="operator-gadget">Breaching Charge (F)</div>
       </button>
-      <button type="button" class="operator-card" data-operator="recon">
+      <button class="operator-card" data-operator="recon">
         <div class="operator-name">RECON</div>
         <div class="operator-weapon">SMG · 25 rounds</div>
         <div class="operator-gadget">Recon Drone (F)</div>
       </button>
-      <button type="button" class="operator-card" data-operator="support">
+      <button class="operator-card" data-operator="support">
         <div class="operator-name">SUPPORT</div>
         <div class="operator-weapon">Shotgun · 8 shells</div>
         <div class="operator-gadget">Deployable Shield (F)</div>
@@ -763,8 +693,8 @@
     <button id="round-restart-button" class="prompt-box">Play Again</button>
   </div>
 
-  <!-- Click-to-play overlay: hidden until a match is ready and pointer lock is needed -->
-  <div id="click-to-play-overlay" class="hidden">
+  <!-- Click-to-play overlay, shown before pointer lock is acquired -->
+  <div id="click-to-play-overlay">
     <div id="game-title">POLY-SIEGE</div>
     <div id="game-subtitle">Operation Omega</div>
     <div class="prompt-box">Click to Play</div>
@@ -858,7 +788,7 @@ const CONFIG = {
     ADS_RECOIL_MULTIPLIER: 0.5, // tighter recoil while aiming
     ADS_TRANSITION_SPEED: 10, // how fast FOV/gun position lerp toward their target
     GUN_HIP_POSITION: new THREE.Vector3(0.28, -0.28, -0.55),
-    GUN_ADS_POSITION: new THREE.Vector3(0, -0.115, -0.13),
+    GUN_ADS_POSITION: new THREE.Vector3(0, -0.14, -0.32),
     RELOAD_DIP_ANGLE: THREE.MathUtils.degToRad(28), // how far the gun tips down/forward during reload
     RELOAD_DIP_HEIGHT: 0.07, // how far the gun drops during reload
     RELOAD_MAGAZINE_DROP: 0.22, // how far the magazine slides out before the "new" one slides back in
@@ -1037,59 +967,11 @@ sunLight.target.position.set(0, 0, -12);
 
 const clickToPlayOverlay = document.getElementById('click-to-play-overlay');
 const pauseOverlay = document.getElementById('pause-overlay');
-const mainMenuOverlay = document.getElementById('main-menu-overlay');
-const modeOnlineButton = document.getElementById('mode-online-button');
-const modeBotsButton = document.getElementById('mode-bots-button');
-const onlineUnavailablePanel = document.getElementById('online-unavailable-panel');
-const onlineBackButton = document.getElementById('online-back-button');
-const operatorSelectOverlay = document.getElementById('operator-select-overlay');
-const modeSelectButtons = document.getElementById('mode-select-buttons');
 
 let pointerIsLocked = false;
-// True once the player has picked an operator and left the menus. Used so
-// losing pointer lock mid-match shows Pause, while menu screens stay quiet.
-let gameStarted = false;
-// Declared early so pointer-lock handlers can read it before the round
-// system block below finishes initializing.
-let roundPhase = 'select'; // 'select' | 'prep' | 'action' | 'over'
 
 function requestGameLock() {
-  // Clear overlays first so a failed lock in a sandboxed iframe doesn't
-  // leave an invisible blocker sitting on top of the canvas.
-  clickToPlayOverlay.classList.add('hidden');
-  clickToPlayOverlay.style.display = '';
-  pauseOverlay.classList.remove('visible');
-  pauseOverlay.style.display = '';
-
-  if (!canvas.requestPointerLock) {
-    console.error('Pointer Lock API is unavailable in this browser.');
-    showClickToPlayFallback();
-    return;
-  }
-  const lockPromise = canvas.requestPointerLock();
-  // Newer browsers return a Promise; reject → show click-to-play fallback.
-  if (lockPromise && typeof lockPromise.catch === 'function') {
-    lockPromise.catch((err) => {
-      console.error('Pointer lock request failed.', err);
-      showClickToPlayFallback();
-    });
-  }
-}
-
-function showClickToPlayFallback() {
-  if (!gameStarted) return;
-  pauseOverlay.classList.remove('visible');
-  pauseOverlay.style.display = '';
-  clickToPlayOverlay.style.display = '';
-  clickToPlayOverlay.classList.remove('hidden');
-}
-
-function isMenuScreenOpen() {
-  const mainOpen = mainMenuOverlay.style.display !== 'none' &&
-    getComputedStyle(mainMenuOverlay).display !== 'none';
-  const operatorOpen = operatorSelectOverlay.style.display === 'flex' ||
-    operatorSelectOverlay.classList.contains('visible');
-  return mainOpen || operatorOpen;
+  canvas.requestPointerLock();
 }
 
 function onPointerLockChange() {
@@ -1097,21 +979,16 @@ function onPointerLockChange() {
   if (pointerIsLocked) {
     clickToPlayOverlay.classList.add('hidden');
     pauseOverlay.classList.remove('visible');
-    return;
+  } else {
+    // Lock was released (Esc, alt-tab, etc.) — show the pause overlay
+    // unless we're still on the very first click-to-play screen.
+    if (!clickToPlayOverlay.classList.contains('hidden')) return;
+    pauseOverlay.classList.add('visible');
   }
-
-  // Still picking mode/operator — don't flash pause or click-to-play.
-  if (!gameStarted || isMenuScreenOpen() || roundPhase === 'select' || roundPhase === 'over') {
-    return;
-  }
-
-  // Lock released mid-match (Esc, alt-tab, etc.).
-  pauseOverlay.classList.add('visible');
 }
 
 function onPointerLockError() {
   console.error('Pointer lock request failed.');
-  showClickToPlayFallback();
 }
 
 clickToPlayOverlay.addEventListener('click', requestGameLock);
@@ -1124,30 +1001,6 @@ pauseOverlay.addEventListener('click', (event) => {
 });
 document.addEventListener('pointerlockchange', onPointerLockChange);
 document.addEventListener('pointerlockerror', onPointerLockError);
-
-// ---- Main menu wiring (early) ----
-// Attach as soon as overlays exist so mode buttons respond even if a later
-// systems init hiccups. Operator → match start is wired after round helpers.
-modeOnlineButton.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  modeSelectButtons.style.display = 'none';
-  onlineUnavailablePanel.classList.add('visible');
-});
-onlineBackButton.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  onlineUnavailablePanel.classList.remove('visible');
-  modeSelectButtons.style.display = 'flex';
-});
-modeBotsButton.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  mainMenuOverlay.style.display = 'none';
-  onlineUnavailablePanel.classList.remove('visible');
-  operatorSelectOverlay.style.display = 'flex';
-  operatorSelectOverlay.classList.add('visible');
-});
 
 // ---- Settings panel (mouse sensitivity, FOV, invert Y) ----
 const settingsToggleButton = document.getElementById('settings-toggle-button');
@@ -1561,9 +1414,9 @@ function buildScopeReticle() {
   return group;
 }
 
-// Removed front reticle
-
-
+const scopeReticleFront = buildScopeReticle();
+scopeReticleFront.position.set(0, 0.115, -0.232); // sits just outside the front lens, toward the muzzle
+gunVisualGroup.add(scopeReticleFront);
 
 const scopeReticleBack = buildScopeReticle();
 scopeReticleBack.position.set(0, 0.115, -0.092); // sits just outside the back (eyepiece) lens
@@ -1873,54 +1726,6 @@ function updateGunBob(deltaTime) {
 // while held, reload countdown + animation, ADS lerp, recoil decay,
 // muzzle flash. Called from the game loop.
 function updateWeapon(deltaTime) {
-  // Smooth scope lens vignette transition based on aiming state
-  const vignetteEl = document.getElementById('scope-vignette');
-  if (vignetteEl) {
-    vignetteEl.style.opacity = isAiming ? '1' : '0';
-  }
-  // Apply melee swing rotation loop
-  if (typeof meleeSwingTimer !== 'undefined' && meleeSwingTimer > 0) {
-    meleeSwingTimer -= deltaTime;
-    const progress = (0.25 - meleeSwingTimer) / 0.25;
-    if (gunVisualGroup) {
-      gunVisualGroup.rotation.z = Math.sin(progress * Math.PI) * 0.7;
-      gunVisualGroup.rotation.x = -Math.sin(progress * Math.PI) * 0.4;
-    }
-  } else if (gunVisualGroup) {
-    gunVisualGroup.rotation.z = THREE.MathUtils.lerp(gunVisualGroup.rotation.z, 0, 10 * deltaTime);
-    gunVisualGroup.rotation.x = THREE.MathUtils.lerp(gunVisualGroup.rotation.x, 0, 10 * deltaTime);
-  }
-  // Smooth scope lens vignette transition based on aiming state
-  // Apply melee swing rotation loop
-  if (typeof meleeSwingTimer !== 'undefined' && meleeSwingTimer > 0) {
-    meleeSwingTimer -= deltaTime;
-    const progress = (0.25 - meleeSwingTimer) / 0.25;
-    // Quick outward-inward slash rotation
-    if (gunVisualGroup) {
-      gunVisualGroup.rotation.z = Math.sin(progress * Math.PI) * 0.7;
-      gunVisualGroup.rotation.x = -Math.sin(progress * Math.PI) * 0.4;
-    }
-  } else if (gunVisualGroup) {
-    gunVisualGroup.rotation.z = THREE.MathUtils.lerp(gunVisualGroup.rotation.z, 0, 10 * deltaTime);
-    gunVisualGroup.rotation.x = THREE.MathUtils.lerp(gunVisualGroup.rotation.x, 0, 10 * deltaTime);
-  }
-  // Apply melee swing rotation loop
-  if (typeof meleeSwingTimer !== 'undefined' && meleeSwingTimer > 0) {
-    meleeSwingTimer -= deltaTime;
-    const progress = (0.25 - meleeSwingTimer) / 0.25;
-    // Quick outward-inward slash rotation
-    if (gunVisualGroup) {
-      gunVisualGroup.rotation.z = Math.sin(progress * Math.PI) * 0.7;
-      gunVisualGroup.rotation.x = -Math.sin(progress * Math.PI) * 0.4;
-    }
-  } else if (gunVisualGroup) {
-    gunVisualGroup.rotation.z = THREE.MathUtils.lerp(gunVisualGroup.rotation.z, 0, 10 * deltaTime);
-    gunVisualGroup.rotation.x = THREE.MathUtils.lerp(gunVisualGroup.rotation.x, 0, 10 * deltaTime);
-  }
-  const vignetteEl = document.getElementById('scope-vignette');
-  if (vignetteEl) {
-    vignetteEl.style.opacity = isAiming ? '1' : '0';
-  }
   timeSinceLastShot += deltaTime;
 
   // Reloading locks out firing — you can't shoot mid-reload.
@@ -2751,6 +2556,7 @@ CONFIG.ROUND = {
   INTERACT_RANGE: 2.2, // how close the player must be to the site to plant
 };
 
+let roundPhase = 'select'; // 'select' | 'prep' | 'action' | 'over'
 let prepTimeRemaining = CONFIG.ROUND.PREP_DURATION;
 let roundResult = null; // 'attackers' | 'defenders'
 
@@ -2835,8 +2641,26 @@ function buildDroneModel() {
   return group;
 }
 
-// HUD elements this section drives. (Main-menu button refs + listeners are
-// wired earlier, next to pointer-lock setup, so mode select always responds.)
+// HUD elements this section drives.
+const mainMenuOverlay = document.getElementById('main-menu-overlay');
+const modeOnlineButton = document.getElementById('mode-online-button');
+const modeBotsButton = document.getElementById('mode-bots-button');
+const onlineUnavailablePanel = document.getElementById('online-unavailable-panel');
+const onlineBackButton = document.getElementById('online-back-button');
+const operatorSelectOverlay = document.getElementById('operator-select-overlay');
+
+// ---- Main menu: Online (unavailable — no backend in this standalone
+// build) vs Bots (the existing AI-defender game). ----
+modeOnlineButton.addEventListener('click', () => {
+  onlineUnavailablePanel.classList.add('visible');
+});
+onlineBackButton.addEventListener('click', () => {
+  onlineUnavailablePanel.classList.remove('visible');
+});
+modeBotsButton.addEventListener('click', () => {
+  mainMenuOverlay.style.display = 'none';
+  operatorSelectOverlay.style.display = 'flex';
+});
 const roundHudEl = document.getElementById('round-hud');
 const plantProgressContainer = document.getElementById('plant-progress-container');
 const plantProgressBar = document.getElementById('plant-progress-bar');
@@ -2861,31 +2685,12 @@ function applyOperatorLoadout(operatorKey) {
   despawnDrone();
 }
 
-// Leaves the menus and starts a match on the same user gesture as the
-// operator click — critical for pointer lock, which browsers only grant
-// inside a short-lived click handler.
-function beginMatch(operatorKey) {
-  if (!operatorKey || !CONFIG.OPERATORS[operatorKey]) return;
-
-  applyOperatorLoadout(operatorKey);
-  mainMenuOverlay.style.display = 'none';
-  operatorSelectOverlay.style.display = 'none';
-  operatorSelectOverlay.classList.remove('visible');
-  onlineUnavailablePanel.classList.remove('visible');
-  pauseOverlay.classList.remove('visible');
-  clickToPlayOverlay.classList.add('hidden');
-
-  gameStarted = true;
-  startPrepPhase();
-  requestGameLock();
-}
-
-// Event delegation so clicks on nested label divs still start the match.
-operatorSelectOverlay.addEventListener('click', (event) => {
-  const card = event.target.closest('.operator-card');
-  if (!card) return;
-  event.preventDefault();
-  beginMatch(card.dataset.operator);
+document.querySelectorAll('.operator-card').forEach((card) => {
+  card.addEventListener('click', () => {
+    applyOperatorLoadout(card.dataset.operator);
+    operatorSelectOverlay.style.display = 'none';
+    startPrepPhase();
+  });
 });
 
 // ---- Round flow ----
@@ -3066,60 +2871,26 @@ function getGadgetStatusText() {
 const meleeRaycaster = new THREE.Raycaster();
 let meleeCooldownRemaining = 0;
 
-// Play physical weapon slash rotation animation & create kinetic swing feedback
-let meleeSwingTimer = 0;
 function useMelee() {
   if (meleeCooldownRemaining > 0) return;
   if (isPilotingDrone || isPlayerDead || isReloading) return;
   if (roundPhase !== 'prep' && roundPhase !== 'action') return;
 
   meleeCooldownRemaining = CONFIG.MELEE_COOLDOWN;
-  meleeSwingTimer = 0.25; // 250ms visual weapon rotation swing
 
   const origin = new THREE.Vector3();
   camera.getWorldPosition(origin);
   const direction = new THREE.Vector3();
   camera.getWorldDirection(direction);
 
-  // Kinetic Swing Flash visual overlay element
-  const hitFlash = document.createElement('div');
-  hitFlash.style.position = 'fixed';
-  hitFlash.style.top = '50%';
-  hitFlash.style.left = '50%';
-  hitFlash.style.transform = 'translate(-50%, -50%)';
-  hitFlash.style.width = '120px';
-  hitFlash.style.height = '120px';
-  hitFlash.style.borderRadius = '50%';
-  hitFlash.style.border = '2px solid rgba(255, 255, 255, 0.5)';
-  hitFlash.style.background = 'radial-gradient(circle, rgba(255,255,255,0.2) 10%, transparent 70%)';
-  hitFlash.style.pointerEvents = 'none';
-  hitFlash.style.zIndex = '99';
-  document.body.appendChild(hitFlash);
-  setTimeout(() => hitFlash.remove(), 120);
-
   meleeRaycaster.set(origin, direction);
   meleeRaycaster.far = CONFIG.MELEE_RANGE;
-
-  // Query both walls and enemies
-  const targets = collidableMeshes.concat(enemyHitboxMeshes);
-  const hits = meleeRaycaster.intersectObjects(targets, true);
+  const hits = meleeRaycaster.intersectObjects(collidableMeshes, false);
   if (hits.length === 0) return;
 
   const hit = hits[0];
-  let currentObj = hit.object;
-  while (currentObj) {
-    if (currentObj.userData.isDoor) {
-      damageDoor(currentObj.userData.doorState, 'melee');
-      break;
-    }
-    if (currentObj.userData.owner) {
-      // Hit Enemy Operator!
-      const enemyObj = currentObj.userData.owner;
-      enemyObj.takeDamage(45, false, hit.point);
-      createSparks(hit.point, new THREE.Vector3(0, 1, 0), '#ff2222', 8);
-      break;
-    }
-    currentObj = currentObj.parent;
+  if (hit.object.userData.isDoor) {
+    damageDoor(hit.object.userData.doorState, 'melee');
   }
 }
 
@@ -3354,11 +3125,7 @@ function resetRound() {
   roundOverOverlay.classList.remove('visible');
   roundPhase = 'select';
   roundResult = null;
-  gameStarted = false;
-  clickToPlayOverlay.classList.add('hidden');
-  pauseOverlay.classList.remove('visible');
   operatorSelectOverlay.style.display = 'flex';
-  operatorSelectOverlay.classList.add('visible');
 
   playerRig.position.copy(CONFIG.PLAYER_SPAWN);
   playerRig.rotation.y = 0;
