@@ -121,4 +121,4 @@ Still open:
 - Enemy pathfinding is a simple waypoint graph on the ground floor only — bots don't currently navigate stairs/ladders to reach upper floors
 - No audio yet
 
-PS. This is all VibeCoded (Made With Claude AI)
+PS. This is all VibeCoded
