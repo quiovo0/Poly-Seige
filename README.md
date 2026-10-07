@@ -1,5 +1,7 @@
 # POLY-SIEGE: OPERATION OMEGA
 
+https://quiovo0.github.io/Poly-Seige/
+
 A browser-based, low-poly tactical FPS inspired by *Rainbow Six: Siege* — built entirely in **Three.js** and **vanilla JavaScript**, with no build step, no backend, and no external art assets. Everything you see (the gun, the house, the defenders, the bullets) is procedurally generated from primitive geometry at runtime.
 
 Run it by opening a single HTML file in a browser.
