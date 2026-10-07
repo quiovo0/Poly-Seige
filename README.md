@@ -120,7 +120,3 @@ Still open:
 - No persistent progression/stats between sessions
 - Enemy pathfinding is a simple waypoint graph on the ground floor only — bots don't currently navigate stairs/ladders to reach upper floors
 - No audio yet
-
-## License
-
-Add a license of your choice here before publishing the repo (e.g. MIT) — none is specified by default.
