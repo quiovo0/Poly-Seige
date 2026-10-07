@@ -120,3 +120,5 @@ Still open:
 - No persistent progression/stats between sessions
 - Enemy pathfinding is a simple waypoint graph on the ground floor only — bots don't currently navigate stairs/ladders to reach upper floors
 - No audio yet
+
+PS. This is all VibeCoded
