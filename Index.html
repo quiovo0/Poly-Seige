@@ -702,7 +702,7 @@
       You start each round scouting from a drone — <b>WASD</b> Fly, <b>Space</b> Hop, <b>Shift</b> Boost — until the timer deploys you in<br>
       <b>WASD</b> Move &nbsp;|&nbsp; <b>Mouse</b> Look &nbsp;|&nbsp; <b>Shift</b> Sprint &nbsp;|&nbsp; <b>C</b> Crouch (toggle)<br>
       <b>Q / E</b> Lean (toggle) &nbsp;|&nbsp; <b>LMB</b> Fire &nbsp;|&nbsp; <b>RMB</b> Aim &nbsp;|&nbsp; <b>R</b> Reload<br>
-      <b>F</b> Gadget &nbsp;|&nbsp; <b>G</b> Plant Bomb &nbsp;|&nbsp; <b>Esc</b> Release Cursor
+      <b>F</b> Gadget &nbsp;|&nbsp; <b>G</b> Plant Bomb &nbsp;|&nbsp; <b>V</b> Melee &nbsp;|&nbsp; <b>Esc</b> Release Cursor
     </div>
   </div>
 
@@ -1057,6 +1057,7 @@ function onKeyDown(event) {
     // explicit request), so the gadget and bomb-plant interact are on F
     // and G instead — see the controls hint in the Click to Play overlay.
     if (event.code === 'KeyF') useGadget();
+    if (event.code === 'KeyV') useMelee();
   }
   keys[event.code] = true;
 }
@@ -1578,6 +1579,11 @@ function fireWeapon() {
           : hitboxTypeHit === 'limb' ? CONFIG.ENEMY.LIMB_DAMAGE_MULTIPLIER
           : CONFIG.ENEMY.TORSO_DAMAGE_MULTIPLIER;
         enemyOwner.takeDamage(profile.damage * multiplier);
+      } else if (hit.object.userData.isDoor) {
+        // Closed door walls: a shotgun pellet instabreaks it outright;
+        // any other weapon needs exactly BULLET_HITS_TO_BREAK individual
+        // bullet hits, regardless of that weapon's per-shot damage number.
+        damageDoor(hit.object.userData.doorState, profile.pelletCount > 1 ? 'shotgun' : 'bullet');
       }
       // Destructible (breach) walls are deliberately immune to gunfire —
       // only Assault's Breaching Charge (useGadgetBreach) can bring them
@@ -1878,8 +1884,12 @@ class Enemy {
   // Raycasts from the enemy's head to the player's camera, gated by
   // distance and a generous forward-facing cone, and blocked by anything
   // in collidableMeshes (walls/boxes) — the "Combat: if player is
-  // visible via raycast" check from the spec.
+  // visible via raycast" check from the spec. Always false before Action
+  // Phase: the attacker isn't deployed yet (still scouting/prepping), so
+  // defenders patrol obliviously and never open fire during that window.
   _canSeePlayer() {
+    if (roundPhase !== 'action') return false;
+
     const eyePosition = new THREE.Vector3();
     this.head.getWorldPosition(eyePosition);
     const playerPosition = new THREE.Vector3();
@@ -2103,6 +2113,14 @@ CONFIG.WALL = {
   DEBRIS_LIFETIME: 4, // seconds before debris cubes are cleaned up
   DEBRIS_SPEED: 3.5,
 };
+CONFIG.DOOR_WALL = {
+  SEGMENT_COUNT: 3, // visual chunks — one is removed per melee hit
+  MELEE_HITS_TO_BREAK: 3,
+  BULLET_HITS_TO_BREAK: 27, // exact bullet count, independent of weapon damage
+  GREEN_COLOR: 0x1fcc4a,
+};
+CONFIG.MELEE_RANGE = 2.2;
+CONFIG.MELEE_COOLDOWN = 0.6; // seconds between swings
 
 const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x6b6b64, flatShading: true, roughness: 0.9 });
 const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5a5a53, flatShading: true, roughness: 0.9 });
@@ -2235,6 +2253,43 @@ function addCoverCrate(x, z, floorY) {
   buildLevelBox(x, floorY + size / 2, z, size, size, size, crateMaterial, false, true);
 }
 
+const doorMaterial = new THREE.MeshStandardMaterial({
+  color: CONFIG.DOOR_WALL.GREEN_COLOR,
+  flatShading: true,
+  roughness: 0.6,
+  emissive: 0x0a3d1a,
+  emissiveIntensity: 0.3,
+});
+const doorWalls = []; // every doorState, so updateDoorVisuals()-type code could scan them later if needed
+
+// Fills a door-sized opening with a closed, breakable green wall instead
+// of leaving it open — built as SEGMENT_COUNT stacked bands (axis 'x' for
+// an opening in a wall running along X, 'z' for one running along Z) so a
+// melee hit can visibly knock one band out at a time. All three segments
+// share one `doorState` (melee/bullet hit counters + the list of segments
+// still standing) via userData, so hitting any part of the door damages
+// the same shared counters.
+function buildDoorWall(axis, fixedCoord, gapStart, gapEnd, baseY, height) {
+  const segmentHeight = height / CONFIG.DOOR_WALL.SEGMENT_COUNT;
+  const span = gapEnd - gapStart;
+  const center = (gapStart + gapEnd) / 2;
+  const doorState = { meleeHits: 0, bulletHits: 0, segments: [] };
+
+  for (let i = 0; i < CONFIG.DOOR_WALL.SEGMENT_COUNT; i++) {
+    const segmentY = baseY + segmentHeight * (i + 0.5);
+    const mesh =
+      axis === 'x'
+        ? buildLevelBox(center, segmentY, fixedCoord, span, segmentHeight, CONFIG.BUILDING.WALL_THICKNESS, doorMaterial, false, true)
+        : buildLevelBox(fixedCoord, segmentY, center, CONFIG.BUILDING.WALL_THICKNESS, segmentHeight, span, doorMaterial, false, true);
+    mesh.userData.isDoor = true;
+    mesh.userData.doorState = doorState;
+    doorState.segments.push(mesh);
+  }
+
+  doorWalls.push(doorState);
+  return doorState;
+}
+
 function buildKillhouse() {
   const { X_MIN, X_MAX, Z_MIN, Z_MAX, FLOOR_HEIGHT } = CONFIG.BUILDING;
 
@@ -2259,6 +2314,11 @@ function buildKillhouse() {
   addOpeningFrameAlongX(Z_MAX, -1, 1, 0, FLOOR_HEIGHT);
   addOpeningFrameAlongX(Z_MIN, 2, 6, 0, FLOOR_HEIGHT);
   addOpeningFrameAlongZ(X_MAX, -13, -9, 0, FLOOR_HEIGHT);
+
+  // The main entrance is a closed door, not an open gap — fill it with a
+  // breakable green door wall (melee with V, or shoot/shotgun it down).
+  // Windows stay open as before.
+  buildDoorWall('x', Z_MAX, -1, 1, 0, FLOOR_HEIGHT);
 
   // ---- Floor 2 exterior walls (solid, aside from a south light gap and
   // the roof-hatch entry matching the ladder's Z range on the west side) ----
@@ -2391,6 +2451,48 @@ function destroyWall(wallMesh) {
   const colliderIndex = wallColliders.indexOf(wallMesh);
   if (colliderIndex !== -1) wallColliders.splice(colliderIndex, 1);
   spawnDebris(wallMesh.position, wallMesh.geometry.parameters);
+}
+
+// Removes one standing segment of a door (last one in the array) and lets
+// the Destruction System's normal debris burst play at its position —
+// this is the "a piece of the wall comes off" feedback on every hit.
+function removeOneDoorSegment(doorState) {
+  const segment = doorState.segments.pop();
+  if (!segment) return;
+  destroyWall(segment);
+}
+
+// Applies one hit of a given type to a door's shared state:
+//  - 'melee': one of CONFIG.DOOR_WALL.MELEE_HITS_TO_BREAK (each removes a segment)
+//  - 'bullet': one of CONFIG.DOOR_WALL.BULLET_HITS_TO_BREAK (every Nth bullet removes a segment)
+//  - 'shotgun': a single pellet instantly clears every remaining segment
+function damageDoor(doorState, hitType) {
+  if (!doorState || doorState.segments.length === 0) return;
+
+  if (hitType === 'shotgun') {
+    while (doorState.segments.length > 0) removeOneDoorSegment(doorState);
+    return;
+  }
+
+  if (hitType === 'melee') {
+    doorState.meleeHits++;
+    removeOneDoorSegment(doorState);
+    return;
+  }
+
+  // 'bullet': exactly BULLET_HITS_TO_BREAK total bullets fully clears the
+  // door, with a segment knocked out every BULLET_HITS_TO_BREAK/SEGMENT_COUNT
+  // hits so it visibly breaks apart in stages rather than vanishing at once.
+  doorState.bulletHits++;
+  const hitsPerSegment = CONFIG.DOOR_WALL.BULLET_HITS_TO_BREAK / CONFIG.DOOR_WALL.SEGMENT_COUNT;
+  const segmentsThatShouldBeGone = Math.min(
+    CONFIG.DOOR_WALL.SEGMENT_COUNT,
+    Math.floor(doorState.bulletHits / hitsPerSegment)
+  );
+  const segmentsCurrentlyGone = CONFIG.DOOR_WALL.SEGMENT_COUNT - doorState.segments.length;
+  for (let i = segmentsCurrentlyGone; i < segmentsThatShouldBeGone; i++) {
+    removeOneDoorSegment(doorState);
+  }
 }
 
 // Spawns a handful of small tumbling cubes with random outward velocity
@@ -2762,6 +2864,43 @@ function getGadgetStatusText() {
   return '--';
 }
 
+// ---- Melee (V) ----
+// A short-range forward raycast, on a small cooldown so it can't be
+// spammed. Currently only does something against door walls (3 hits to
+// break one) — it doesn't harm enemies in this build.
+const meleeRaycaster = new THREE.Raycaster();
+let meleeCooldownRemaining = 0;
+
+function useMelee() {
+  if (meleeCooldownRemaining > 0) return;
+  if (isPilotingDrone || isPlayerDead || isReloading) return;
+  if (roundPhase !== 'prep' && roundPhase !== 'action') return;
+
+  meleeCooldownRemaining = CONFIG.MELEE_COOLDOWN;
+
+  const origin = new THREE.Vector3();
+  camera.getWorldPosition(origin);
+  const direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
+
+  meleeRaycaster.set(origin, direction);
+  meleeRaycaster.far = CONFIG.MELEE_RANGE;
+  const hits = meleeRaycaster.intersectObjects(collidableMeshes, false);
+  if (hits.length === 0) return;
+
+  const hit = hits[0];
+  if (hit.object.userData.isDoor) {
+    damageDoor(hit.object.userData.doorState, 'melee');
+  }
+}
+
+// Ticks the melee swing cooldown down. Called from the game loop.
+function updateMeleeCooldown(deltaTime) {
+  if (meleeCooldownRemaining > 0) {
+    meleeCooldownRemaining = Math.max(0, meleeCooldownRemaining - deltaTime);
+  }
+}
+
 // Assault: destroys the nearest destructible wall within 3m, instantly. One charge per round.
 function useGadgetBreach() {
   if (!breachChargeAvailable) return;
@@ -2819,6 +2958,12 @@ function removeShield() {
 function deployDrone(position, yaw, pitch, mode) {
   droneMesh = buildDroneModel();
   droneMesh.position.copy(position);
+  // Hidden from the local camera — you're piloting it, so you'd just be
+  // staring at the inside of your own drone's body. It stays in the scene
+  // graph and keeps updating its real transform every frame, because in a
+  // networked build that's exactly what other players' clients would
+  // render for them; only your own view skips drawing it.
+  droneMesh.visible = false;
   scene.add(droneMesh);
 
   droneCamera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, CONFIG.FAR_PLANE);
@@ -3143,9 +3288,13 @@ function animate() {
       updateLean(deltaTime);
       updateWeapon(deltaTime);
       updateCrosshairSpread(deltaTime);
+      updateMeleeCooldown(deltaTime);
     }
     updatePlayerStationaryTracking(deltaTime);
-    if (roundPhase === 'action') {
+    // Bots patrol and go about their business from Prep onward — they just
+    // can't see/engage the player (see Enemy._canSeePlayer) until Action
+    // actually starts, since the attacker isn't even deployed yet.
+    if (roundPhase === 'prep' || roundPhase === 'action') {
       updateEnemies(deltaTime);
     }
     updateDebris(deltaTime);
