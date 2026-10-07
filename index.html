@@ -244,6 +244,9 @@
   #ammo-current { font-size: 1.5rem; font-weight: 900; color: var(--color-neon-cyan); }
   #ammo-reserve { font-size: 1rem; color: #999; }
   #ammo-weapon-name { font-size: 0.7rem; letter-spacing: 0.1em; color: #888; text-transform: uppercase; margin-top: 2px; }
+  #ammo-counts, #ammo-weapon-name { transition: opacity 0.15s ease; }
+  #ammo-hud.drone-phase #ammo-counts,
+  #ammo-hud.drone-phase #ammo-weapon-name { opacity: 0; height: 0; margin: 0; overflow: hidden; }
   #gadget-status { font-size: 0.7rem; letter-spacing: 0.05em; color: var(--color-neon-orange); margin-top: 4px; }
   #reload-hint {
     font-size: 0.75rem;
@@ -251,6 +254,40 @@
     color: var(--color-neon-orange);
     margin-top: 2px;
     height: 1em;
+  }
+
+  /* ========== HUD: DRONE BOOST (bottom right, drone phase only) ========== */
+  #drone-boost-hud {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+    color: #888;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  #ammo-hud.drone-phase #drone-boost-hud { display: flex; }
+  #drone-boost-icon {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    color: #777;
+    transition: color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+  #drone-boost-icon svg { width: 18px; height: 18px; fill: currentColor; }
+  #drone-boost-hud.active { color: var(--color-neon-cyan); }
+  #drone-boost-hud.active #drone-boost-icon {
+    color: var(--color-neon-cyan);
+    border-color: var(--color-neon-cyan);
+    background: rgba(0, 255, 255, 0.12);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.35);
   }
 
   /* ========== HUD: KILL FEED (top right) ========== */
@@ -607,10 +644,19 @@
     <span id="health-number">100</span>
   </div>
 
-  <!-- Ammo + gadget (bottom-right) -->
+  <!-- Ammo + gadget (bottom-right); ammo/weapon hidden while piloting a drone -->
   <div id="ammo-hud">
-    <div><span id="ammo-current">--</span> / <span id="ammo-reserve">--</span></div>
+    <div id="ammo-counts"><span id="ammo-current">--</span> / <span id="ammo-reserve">--</span></div>
     <div id="ammo-weapon-name">--</div>
+    <div id="drone-boost-hud">
+      <span id="drone-boost-label">Boost</span>
+      <div id="drone-boost-icon" title="Hold Shift to boost" aria-label="Drone boost">
+        <!-- Simple chevron / thruster glyph -->
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3l6 7h-3.5v5h-5v-5H6l6-7zm-5 16h10v2H7v-2z"/>
+        </svg>
+      </div>
+    </div>
     <div id="gadget-status">--</div>
     <div id="reload-hint"></div>
   </div>
@@ -781,17 +827,21 @@ const CONFIG = {
     RECOIL_KICK: 0.018, // radians added to pitch per shot
     HORIZONTAL_SWAY: 0.008, // max radians of random yaw kick per shot
     RECOIL_RECOVERY_RATE: 6, // how fast recoil decays back to zero, per second
-    BULLET_SPEED: 55, // units/sec the visible bullet mesh travels — slow enough to actually see in flight
-    BULLET_RADIUS: 0.03,
+    BULLET_SPEED: 40, // units/sec the visible tracer travels — slow enough to read in flight
+    BULLET_RADIUS: 0.025,
+    BULLET_LENGTH: 0.22, // elongated tracer streak so short-range shots still read clearly
     MUZZLE_FLASH_DURATION: 0.05, // seconds the muzzle flash plane stays visible
     ADS_SENSITIVITY_MULTIPLIER: 0.5, // mouse slows down while aiming
     ADS_RECOIL_MULTIPLIER: 0.5, // tighter recoil while aiming
     ADS_TRANSITION_SPEED: 10, // how fast FOV/gun position lerp toward their target
     GUN_HIP_POSITION: new THREE.Vector3(0.28, -0.28, -0.55),
-    GUN_ADS_POSITION: new THREE.Vector3(0, -0.14, -0.32),
+    // Y offset centers the scope reticle on the look axis (reticle sits at local y ≈ 0.115).
+    GUN_ADS_POSITION: new THREE.Vector3(0, -0.115, -0.35),
     RELOAD_DIP_ANGLE: THREE.MathUtils.degToRad(28), // how far the gun tips down/forward during reload
     RELOAD_DIP_HEIGHT: 0.07, // how far the gun drops during reload
     RELOAD_MAGAZINE_DROP: 0.22, // how far the magazine slides out before the "new" one slides back in
+    MELEE_DURATION: 0.45, // seconds the knife swing animation lasts
+    MELEE_GUN_TUCK: 0.22, // how far the rifle tucks down/back while the knife is out
   },
 };
 
@@ -1359,6 +1409,8 @@ const gunStock = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.16), gunBody
 gunStock.position.set(0, -0.005, 0.1);
 gunVisualGroup.add(gunStock);
 
+// Iron-sight nub for hip-fire silhouette only — hidden while ADS so it
+// doesn't stack a second aiming mark on top of the holographic reticle.
 const gunSight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.03), gunAccentMaterial);
 gunSight.position.set(0, 0.07, -0.15);
 gunVisualGroup.add(gunSight);
@@ -1389,13 +1441,9 @@ scopeBody.position.set(0, 0.115, -0.16);
 gunVisualGroup.add(scopeBody);
 
 // ---- Reticle ----
-// A small red ring with a tiny center dot and a short vertical drop line
-// beneath it — a compact holographic-style reticle, much smaller than the
-// tube's opening, matching the reference image. It appears to float
-// inside the hollow tube. Built as a flat group and stamped near both
-// ends (front and back) so it reads correctly from any angle. The
-// pattern is symmetric left-right, so the same geometry works unmodified
-// when mirrored at the back.
+// A single holographic reticle (ring + center dot + short drop line)
+// floating in the middle of the tube. Previously stamped at both ends,
+// which stacked two reticles when aiming — keep exactly one.
 const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0xff2222, side: THREE.DoubleSide });
 
 function buildScopeReticle() {
@@ -1408,20 +1456,15 @@ function buildScopeReticle() {
   group.add(dot);
 
   const line = new THREE.Mesh(new THREE.PlaneGeometry(0.0007, 0.008), reticleMaterial);
-  line.position.set(0, -0.009, 0); // hangs just below the ring, with a small gap, like the reference image
+  line.position.set(0, -0.009, 0); // hangs just below the ring, with a small gap
   group.add(line);
 
   return group;
 }
 
-const scopeReticleFront = buildScopeReticle();
-scopeReticleFront.position.set(0, 0.115, -0.232); // sits just outside the front lens, toward the muzzle
-gunVisualGroup.add(scopeReticleFront);
-
-const scopeReticleBack = buildScopeReticle();
-scopeReticleBack.position.set(0, 0.115, -0.092); // sits just outside the back (eyepiece) lens
-scopeReticleBack.rotation.y = Math.PI;
-gunVisualGroup.add(scopeReticleBack);
+const scopeReticle = buildScopeReticle();
+scopeReticle.position.set(0, 0.115, -0.16); // centered in the tube along Z
+gunVisualGroup.add(scopeReticle);
 
 // Muzzle flash: a small glowing plane at the barrel tip, hidden until fired.
 const muzzleFlashMaterial = new THREE.MeshBasicMaterial({
@@ -1447,8 +1490,54 @@ gunGroup.traverse((child) => {
 gunGroup.position.copy(CONFIG.WEAPON.GUN_HIP_POSITION);
 camera.add(gunGroup);
 
+// ---- Melee knife (view-model) ----
+// Parent to the camera separately from the rifle so a V-press can swing
+// the knife across the screen while the gun tucks away for the duration.
+const knifeMaterial = new THREE.MeshStandardMaterial({
+  color: 0xc0c6cc,
+  flatShading: true,
+  roughness: 0.35,
+  metalness: 0.7,
+});
+const knifeHandleMaterial = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a,
+  flatShading: true,
+  roughness: 0.8,
+});
+const knifeGroup = new THREE.Group();
+knifeGroup.visible = false;
+
+const knifeHandle = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.12), knifeHandleMaterial);
+knifeHandle.position.set(0, 0, 0.04);
+knifeGroup.add(knifeHandle);
+
+const knifeGuard = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.02), knifeHandleMaterial);
+knifeGuard.position.set(0, 0, -0.02);
+knifeGroup.add(knifeGuard);
+
+const knifeBlade = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.008, 0.22), knifeMaterial);
+knifeBlade.position.set(0, 0.002, -0.14);
+knifeGroup.add(knifeBlade);
+
+const knifeEdge = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.004, 0.18), gunAccentMaterial);
+knifeEdge.position.set(0, -0.004, -0.15);
+knifeGroup.add(knifeEdge);
+
+knifeGroup.traverse((child) => {
+  if (child.isMesh) {
+    child.castShadow = false;
+    child.receiveShadow = false;
+  }
+});
+camera.add(knifeGroup);
+
+let meleeAnimTimeRemaining = 0;
+
 // ---- Aim down sights (ADS) ----
 let isAiming = false;
+
+// Scratch target used while the knife is out so we don't allocate per frame.
+const _meleeGunTuckPosition = new THREE.Vector3();
 
 // Smoothly lerps FOV and gun position toward their hip/ADS targets each
 // frame, so toggling RMB doesn't snap instantly.
@@ -1459,8 +1548,25 @@ function updateADS(deltaTime) {
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, lerpAmount);
   camera.updateProjectionMatrix();
 
-  const targetGunPosition = isAiming ? CONFIG.WEAPON.GUN_ADS_POSITION : CONFIG.WEAPON.GUN_HIP_POSITION;
-  gunGroup.position.lerp(targetGunPosition, lerpAmount);
+  // While the knife is swinging, park/hide the rifle so it doesn't fight
+  // the melee animation; otherwise lerp toward hip/ADS as usual.
+  const isMeleeAnimating = meleeAnimTimeRemaining > 0;
+  if (isMeleeAnimating) {
+    _meleeGunTuckPosition.set(
+      CONFIG.WEAPON.GUN_HIP_POSITION.x,
+      CONFIG.WEAPON.GUN_HIP_POSITION.y - CONFIG.WEAPON.MELEE_GUN_TUCK,
+      CONFIG.WEAPON.GUN_HIP_POSITION.z + 0.12
+    );
+    gunGroup.position.lerp(_meleeGunTuckPosition, Math.min(1, lerpAmount * 2));
+    gunGroup.visible = false;
+  } else {
+    const targetGunPosition = isAiming ? CONFIG.WEAPON.GUN_ADS_POSITION : CONFIG.WEAPON.GUN_HIP_POSITION;
+    gunGroup.position.lerp(targetGunPosition, lerpAmount);
+    gunGroup.visible = true;
+  }
+
+  // Hide the hip-fire iron sight while ADS so only the holographic reticle aims.
+  gunSight.visible = !isAiming;
 }
 
 // ---- Ammo / firing state ----
@@ -1483,8 +1589,7 @@ let timeSinceLastShot = Infinity;
 let recoilPitch = 0;
 let recoilYaw = 0;
 
-const weaponRaycaster = new THREE.Raycaster(); // eye-based hitscan, for gameplay-fair damage
-const muzzleRaycaster = new THREE.Raycaster(); // muzzle-based, purely for the visible bullet's straight-line path
+const weaponRaycaster = new THREE.Raycaster(); // eye-based hitscan + matching visual tracer path
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 
 // Bullets currently in flight — visible projectiles so you can actually
@@ -1492,18 +1597,35 @@ const SCREEN_CENTER = new THREE.Vector2(0, 0);
 // standing still and firing at something in the distance.
 const activeBullets = [];
 const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffcc66 });
-const bulletGeometry = new THREE.SphereGeometry(CONFIG.WEAPON.BULLET_RADIUS, 6, 6);
+// Elongated capsule oriented along +Y; each tracer is rotated to face its
+// flight direction so even brief close-range shots read as a streak.
+const bulletGeometry = new THREE.CapsuleGeometry(
+  CONFIG.WEAPON.BULLET_RADIUS,
+  CONFIG.WEAPON.BULLET_LENGTH,
+  2,
+  6
+);
+const _bulletUp = new THREE.Vector3(0, 1, 0);
 
-// Spawns a small glowing sphere at origin that travels toward target at
-// BULLET_SPEED, removing itself on arrival. Purely visual — the actual
-// hit was already resolved instantly via raycast in fireWeapon().
-function spawnBullet(origin, target) {
-  const direction = new THREE.Vector3().subVectors(target, origin).normalize();
-  const totalDistance = origin.distanceTo(target);
+// Spawns a tracer streak at origin that travels in `direction` for
+// `totalDistance` at BULLET_SPEED, removing itself on arrival. Purely
+// visual — the actual hit was already resolved instantly via raycast.
+// Passing an explicit direction (instead of deriving it from a target
+// point) keeps tracers perfectly straight along the fired ray.
+function spawnBullet(origin, direction, totalDistance) {
+  const travel = Math.max(0.01, totalDistance);
+  const dir = direction.clone().normalize();
   const mesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
   mesh.position.copy(origin);
+  mesh.quaternion.setFromUnitVectors(_bulletUp, dir);
   scene.add(mesh);
-  activeBullets.push({ mesh, origin: origin.clone(), direction, totalDistance, traveled: 0 });
+  activeBullets.push({
+    mesh,
+    origin: origin.clone(),
+    direction: dir,
+    totalDistance: travel,
+    traveled: 0,
+  });
 }
 
 // Advances every in-flight bullet by BULLET_SPEED * deltaTime and removes
@@ -1526,13 +1648,14 @@ function updateBullets(deltaTime) {
 // shotgun, each with profile.pelletSpread of random angular jitter)
 // against world geometry, enemy hitboxes, and destructible walls,
 // applying profile.damage per pellet (scaled by body part for enemies).
-// Each pellet also gets its own visible bullet: a separate muzzle-based
-// raycast in that pellet's exact direction, so what you see always flies
-// in one dead-straight line and keeps going until it actually hits
-// something, rather than converging on the (possibly offset) hit point.
+// Visible tracers follow the same eye-based ray as the hitscan (spawned
+// a short distance in front of the camera) so they fly in one dead-
+// straight line to the aim point — no muzzle-offset "curve" toward the
+// crosshair. The muzzle flash still plays at the barrel tip for juice.
 function fireWeapon() {
   const profile = getProfile();
   if (isReloading) return;
+  if (meleeAnimTimeRemaining > 0) return;
   if (currentAmmo <= 0) return; // dry — Step 8 will add a dry-fire click sound
   if (timeSinceLastShot < 60 / profile.roundsPerMinute) return;
 
@@ -1546,9 +1669,6 @@ function fireWeapon() {
   camera.getWorldDirection(cameraForward);
   const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
   const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-
-  const muzzleOrigin = new THREE.Vector3();
-  muzzleFlash.getWorldPosition(muzzleOrigin);
 
   let hitboxTypeHit = null;
 
@@ -1568,9 +1688,12 @@ function fireWeapon() {
 
     // Hitscan (eye-based, for gameplay-fair accuracy).
     weaponRaycaster.set(cameraOrigin, pelletDirection);
+    weaponRaycaster.far = CONFIG.WEAPON.RANGE;
     const hits = weaponRaycaster.intersectObjects(raycastTargets, false);
+    let hitDistance = CONFIG.WEAPON.RANGE;
     if (hits.length > 0) {
       const hit = hits[0];
+      hitDistance = hit.distance;
       const enemyOwner = hit.object.userData.owner;
       if (enemyOwner) {
         hitboxTypeHit = hit.object.userData.hitboxType;
@@ -1591,15 +1714,11 @@ function fireWeapon() {
       // they just don't chip away at wallMesh.userData.health.
     }
 
-    // Visible bullet: its own straight-line raycast from the muzzle, in
-    // this same pellet direction, so it never bends toward the hitscan above.
-    muzzleRaycaster.set(muzzleOrigin, pelletDirection);
-    muzzleRaycaster.far = CONFIG.WEAPON.RANGE;
-    const muzzleHits = muzzleRaycaster.intersectObjects(raycastTargets, false);
-    const bulletTarget = muzzleHits.length > 0
-      ? muzzleHits[0].point
-      : muzzleOrigin.clone().addScaledVector(pelletDirection, CONFIG.WEAPON.RANGE);
-    spawnBullet(muzzleOrigin, bulletTarget);
+    // Tracer rides the same ray as the hitscan, starting just ahead of
+    // the camera so it never has to "bend" from the offset muzzle.
+    const tracerOrigin = cameraOrigin.clone().addScaledVector(pelletDirection, 0.55);
+    const tracerDistance = Math.max(0.05, hitDistance - 0.55);
+    spawnBullet(tracerOrigin, pelletDirection, tracerDistance);
   }
 
   lastHitboxHit = hitboxTypeHit; // surfaced on the scoreboard/HUD for verification
@@ -1631,6 +1750,7 @@ function updateMuzzleFlash(deltaTime) {
 function startReload() {
   const profile = getProfile();
   if (isReloading) return;
+  if (meleeAnimTimeRemaining > 0) return;
   if (currentAmmo >= profile.magazineSize) return;
   if (reserveAmmo <= 0) return;
   isReloading = true;
@@ -1691,7 +1811,8 @@ function updateWeaponRecoil(deltaTime) {
 function onMouseDown(event) {
   if (!pointerIsLocked) return;
   if (event.button === 0) isFiring = true;
-  if (event.button === 2) isAiming = true;
+  // Don't ADS over an active knife swing.
+  if (event.button === 2 && meleeAnimTimeRemaining <= 0) isAiming = true;
 }
 function onMouseUp(event) {
   if (event.button === 0) isFiring = false;
@@ -1734,6 +1855,7 @@ function updateWeapon(deltaTime) {
 
   updateReload(deltaTime);
   updateReloadAnimation();
+  updateMeleeAnimation(deltaTime);
   updateADS(deltaTime);
   updateWeaponRecoil(deltaTime);
   updateGunBob(deltaTime);
@@ -1911,7 +2033,8 @@ class Enemy {
 
   // Fires one shot at the player with a small random inaccuracy, applying
   // damage only if nothing in collidableMeshes blocks the shot first.
-  // Reuses the player weapon's visible-bullet system for consistency.
+  // Reuses the player weapon's visible-bullet system for consistency —
+  // tracer follows the same (possibly inaccurate) fired direction.
   _fireAtPlayer() {
     const origin = new THREE.Vector3();
     this.head.getWorldPosition(origin);
@@ -1928,9 +2051,9 @@ class Enemy {
     const distanceToPlayer = origin.distanceTo(playerPosition);
     const blockers = enemyFireRaycaster.intersectObjects(collidableMeshes, false);
     const blockedByWall = blockers.length > 0 && blockers[0].distance < distanceToPlayer;
+    const travelDistance = blockedByWall ? blockers[0].distance : distanceToPlayer;
 
-    const bulletTarget = blockedByWall ? blockers[0].point : playerPosition;
-    spawnBullet(origin, bulletTarget);
+    spawnBullet(origin, direction, travelDistance);
 
     if (!blockedByWall) damagePlayer(CONFIG.ENEMY.FIRE_DAMAGE);
   }
@@ -2679,6 +2802,10 @@ function applyOperatorLoadout(operatorKey) {
   reserveAmmo = profile.reserveAmmoMax;
   isReloading = false;
   reloadTimeRemaining = 0;
+  meleeAnimTimeRemaining = 0;
+  meleeCooldownRemaining = 0;
+  knifeGroup.visible = false;
+  gunGroup.visible = true;
   breachChargeAvailable = true;
   shieldAvailable = true;
   removeShield();
@@ -2867,7 +2994,8 @@ function getGadgetStatusText() {
 // ---- Melee (V) ----
 // A short-range forward raycast, on a small cooldown so it can't be
 // spammed. Currently only does something against door walls (3 hits to
-// break one) — it doesn't harm enemies in this build.
+// break one) — it doesn't harm enemies in this build. Plays a knife
+// swing view-model animation for the duration of the attack.
 const meleeRaycaster = new THREE.Raycaster();
 let meleeCooldownRemaining = 0;
 
@@ -2877,6 +3005,8 @@ function useMelee() {
   if (roundPhase !== 'prep' && roundPhase !== 'action') return;
 
   meleeCooldownRemaining = CONFIG.MELEE_COOLDOWN;
+  meleeAnimTimeRemaining = CONFIG.WEAPON.MELEE_DURATION;
+  isAiming = false; // cancel ADS so the knife swing owns the view-model
 
   const origin = new THREE.Vector3();
   camera.getWorldPosition(origin);
@@ -2886,12 +3016,51 @@ function useMelee() {
   meleeRaycaster.set(origin, direction);
   meleeRaycaster.far = CONFIG.MELEE_RANGE;
   const hits = meleeRaycaster.intersectObjects(collidableMeshes, false);
-  if (hits.length === 0) return;
-
-  const hit = hits[0];
-  if (hit.object.userData.isDoor) {
-    damageDoor(hit.object.userData.doorState, 'melee');
+  if (hits.length > 0) {
+    const hit = hits[0];
+    if (hit.object.userData.isDoor) {
+      damageDoor(hit.object.userData.doorState, 'melee');
+    }
   }
+}
+
+// Drives the first-person knife slash: knife appears from the lower-right,
+// arcs across the screen, then tucks away. Progress is derived from
+// meleeAnimTimeRemaining so it stays locked to the swing timer.
+function updateMeleeAnimation(deltaTime) {
+  if (meleeAnimTimeRemaining <= 0) {
+    knifeGroup.visible = false;
+    return;
+  }
+
+  meleeAnimTimeRemaining = Math.max(0, meleeAnimTimeRemaining - deltaTime);
+  if (meleeAnimTimeRemaining <= 0) {
+    knifeGroup.visible = false;
+    return;
+  }
+
+  const duration = CONFIG.WEAPON.MELEE_DURATION;
+  const progress = 1 - meleeAnimTimeRemaining / duration; // 0 → 1 across the swing
+  // Ease: quick wind-up, snappy mid-slash, soft recover.
+  const slash = progress < 0.35
+    ? (progress / 0.35) * 0.35
+    : progress < 0.55
+      ? 0.35 + ((progress - 0.35) / 0.2) * 0.55
+      : 0.9 + ((progress - 0.55) / 0.45) * 0.1;
+  const t = Math.min(1, slash);
+
+  knifeGroup.visible = true;
+  // Start lower-right, slash up-left across center, finish high-left.
+  knifeGroup.position.set(
+    THREE.MathUtils.lerp(0.35, -0.2, t),
+    THREE.MathUtils.lerp(-0.32, 0.08, t),
+    THREE.MathUtils.lerp(-0.4, -0.55, t)
+  );
+  knifeGroup.rotation.set(
+    THREE.MathUtils.lerp(0.6, -0.35, t),
+    THREE.MathUtils.lerp(-0.4, 0.55, t),
+    THREE.MathUtils.lerp(0.9, -1.1, t)
+  );
 }
 
 // Ticks the melee swing cooldown down. Called from the game loop.
@@ -3151,6 +3320,10 @@ function resetRound() {
 
   removeShield();
   despawnDrone();
+  meleeAnimTimeRemaining = 0;
+  meleeCooldownRemaining = 0;
+  knifeGroup.visible = false;
+  gunGroup.visible = true;
 }
 
 document.getElementById('round-restart-button').addEventListener('click', resetRound);
@@ -3168,9 +3341,11 @@ const hitMarkerEl = document.getElementById('hit-marker');
 const damageVignetteEl = document.getElementById('damage-vignette');
 const healthBarFillEl = document.getElementById('health-bar-fill');
 const healthNumberEl = document.getElementById('health-number');
+const ammoHudEl = document.getElementById('ammo-hud');
 const ammoCurrentEl = document.getElementById('ammo-current');
 const ammoReserveEl = document.getElementById('ammo-reserve');
 const ammoWeaponNameEl = document.getElementById('ammo-weapon-name');
+const droneBoostHudEl = document.getElementById('drone-boost-hud');
 const gadgetStatusEl = document.getElementById('gadget-status');
 const reloadHintEl = document.getElementById('reload-hint');
 const killFeedEl = document.getElementById('kill-feed');
@@ -3231,17 +3406,27 @@ function updateCrosshairSpread(deltaTime) {
 }
 
 // Refreshes every HUD readout for the current frame: health, ammo,
-// gadget status, and (while Tab is held) the scoreboard.
+// gadget status, and (while Tab is held) the scoreboard. During drone
+// piloting the gun ammo/weapon type are hidden and a boost icon is shown.
 function updateHud() {
   const healthPercent = Math.max(0, Math.min(100, (playerHealth / CONFIG.PLAYER_MAX_HEALTH) * 100));
   healthBarFillEl.style.width = `${healthPercent}%`;
   healthNumberEl.textContent = isPlayerDead ? 'DEAD' : String(Math.round(playerHealth));
 
-  ammoCurrentEl.textContent = String(currentAmmo);
-  ammoReserveEl.textContent = String(reserveAmmo);
-  ammoWeaponNameEl.textContent = getProfile().weaponName || currentOperator.toUpperCase();
-  gadgetStatusEl.textContent = getGadgetStatusText();
-  reloadHintEl.textContent = isReloading ? 'RELOADING…' : '';
+  ammoHudEl.classList.toggle('drone-phase', isPilotingDrone);
+  if (isPilotingDrone) {
+    const isBoosting = !!keys['ShiftLeft'] || !!keys['ShiftRight'];
+    droneBoostHudEl.classList.toggle('active', isBoosting);
+    gadgetStatusEl.textContent = droneMode === 'spawn' ? 'SCOUTING DRONE' : getGadgetStatusText();
+    reloadHintEl.textContent = '';
+  } else {
+    droneBoostHudEl.classList.remove('active');
+    ammoCurrentEl.textContent = String(currentAmmo);
+    ammoReserveEl.textContent = String(reserveAmmo);
+    ammoWeaponNameEl.textContent = getProfile().weaponName || currentOperator.toUpperCase();
+    gadgetStatusEl.textContent = getGadgetStatusText();
+    reloadHintEl.textContent = isReloading ? 'RELOADING…' : '';
+  }
 
   if (scoreboardEl.classList.contains('visible')) {
     sbOperatorEl.textContent = getProfile().label || currentOperator.toUpperCase();
@@ -3326,6 +3511,19 @@ window.addEventListener('resize', onWindowResize);
 
 // Kick off the loop.
 animate();
+
+// Dev helper so automated / console tests can fire without pointer-lock
+// mouse events (module scope otherwise hides these). No UI depends on it.
+window.__polySiegeTest = {
+  fire() {
+    currentAmmo = Math.max(currentAmmo, 1);
+    timeSinceLastShot = Infinity; // bypass RPM so console bursts spawn multiple tracers
+    fireWeapon();
+  },
+  melee() { useMelee(); },
+  get ammo() { return { current: currentAmmo, reserve: reserveAmmo }; },
+  get bullets() { return activeBullets.length; },
+};
 </script>
 </body>
 </html>
