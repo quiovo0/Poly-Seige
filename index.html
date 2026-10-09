@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>POLY-SIEGE: OPERATION OMEGA</title>
 <style>
   :root {
@@ -256,6 +256,53 @@
     height: 1em;
   }
 
+  /* ========== HUD: DRONE JUMP COOLDOWN (bottom right, above Boost) ========== */
+  #drone-jump-hud {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+    color: #888;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  #ammo-hud.drone-phase #drone-jump-hud { display: flex; }
+  #drone-jump-icon {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    color: #777;
+    transition: color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+  #drone-jump-icon svg { width: 18px; height: 18px; fill: currentColor; }
+  #drone-jump-hud.ready #drone-jump-icon {
+    color: var(--color-neon-cyan);
+    border-color: var(--color-neon-cyan);
+    background: rgba(0, 255, 255, 0.12);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.35);
+  }
+  #drone-jump-bar-track {
+    width: 36px;
+    height: 7px;
+    border: 1px solid #555;
+    border-radius: 2px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  #drone-jump-bar-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--color-neon-cyan);
+    transition: width 0.08s linear, background 0.15s ease;
+  }
+
   /* ========== HUD: DRONE BOOST (bottom right, drone phase only) ========== */
   #drone-boost-hud {
     display: none;
@@ -288,6 +335,31 @@
     border-color: var(--color-neon-cyan);
     background: rgba(0, 255, 255, 0.12);
     box-shadow: 0 0 10px rgba(0, 255, 255, 0.35);
+  }
+  #drone-boost-hud.depleted #drone-boost-icon {
+    color: #555;
+    border-color: #442222;
+    background: rgba(80, 0, 0, 0.15);
+    box-shadow: none;
+  }
+
+  #drone-boost-pips {
+    display: flex;
+    gap: 4px;
+  }
+  .drone-boost-pip {
+    width: 14px;
+    height: 7px;
+    border: 1px solid #555;
+    border-radius: 2px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .drone-boost-pip-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--color-neon-cyan);
+    transition: width 0.1s linear, background 0.15s ease;
   }
 
   /* ========== HUD: KILL FEED (top right) ========== */
@@ -620,6 +692,235 @@
     border: none;
     font-family: inherit;
   }
+  /* ========== MOBILE / TOUCH ========== */
+  body.is-mobile {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  body.is-mobile #game-canvas { touch-action: none; }
+
+  #controls-hint-mobile { display: none; }
+  body.is-mobile #controls-hint { display: none; }
+  body.is-mobile #controls-hint-mobile {
+    display: block;
+    margin-top: 2em;
+    font-size: 0.8rem;
+    color: #888;
+    text-align: center;
+    line-height: 1.6;
+    padding: 0 1em;
+  }
+  #controls-hint-mobile b { color: var(--color-neon-cyan); }
+
+  #touch-controls {
+    --u: clamp(38px, 12.5vh, 56px);
+    --sr: env(safe-area-inset-right, 0px);
+    --sl: env(safe-area-inset-left, 0px);
+    --sb: env(safe-area-inset-bottom, 0px);
+    --st: env(safe-area-inset-top, 0px);
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    pointer-events: none;
+    touch-action: none;
+  }
+  body.is-mobile.touch-active #touch-controls { display: block; }
+
+  #touch-look-zone {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  #touch-joystick-zone {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 42%;
+    height: 62%;
+    z-index: 2;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  #touch-joystick-base {
+    position: absolute;
+    left: calc(var(--u) * 2.3 + var(--sl));
+    top: calc(100% - var(--u) * 2.3 - var(--sb));
+    width: 120px;
+    height: 120px;
+    margin: -60px 0 0 -60px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 255, 255, 0.4);
+    background: rgba(0, 0, 0, 0.22);
+    opacity: 0.45;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+  #touch-joystick-base.active { opacity: 1; }
+  #touch-joystick-nub {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 52px;
+    height: 52px;
+    margin: -26px 0 0 -26px;
+    border-radius: 50%;
+    background: rgba(0, 255, 255, 0.35);
+    border: 2px solid rgba(0, 255, 255, 0.85);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.35);
+  }
+
+  .touch-button {
+    --size: var(--u);
+    position: absolute;
+    z-index: 3;
+    width: var(--size);
+    height: var(--size);
+    pointer-events: auto;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(4px);
+    color: #eee;
+    font-family: inherit;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: center;
+    line-height: 1.1;
+    cursor: pointer;
+    transition: transform 0.06s ease, background 0.08s ease, border-color 0.08s ease;
+  }
+  .touch-button.pressed {
+    transform: scale(0.93);
+    background: rgba(0, 255, 255, 0.3);
+    border-color: var(--color-neon-cyan);
+  }
+  .touch-button.on {
+    background: rgba(0, 255, 255, 0.22);
+    border-color: var(--color-neon-cyan);
+    color: var(--color-neon-cyan);
+  }
+
+  #touch-fire-button {
+    --size: calc(var(--u) * 1.8);
+    right: calc(var(--u) * 0.35 + var(--sr));
+    bottom: calc(var(--u) * 0.35 + var(--sb));
+    border-color: rgba(255, 102, 0, 0.85);
+    background: rgba(255, 102, 0, 0.25);
+    font-size: 0.8rem;
+  }
+  #touch-fire-button.pressed { background: rgba(255, 102, 0, 0.55); border-color: #ff9955; }
+  #touch-aim-button { --size: calc(var(--u) * 1.1); right: calc(var(--u) * 2.35 + var(--sr)); bottom: calc(var(--u) * 0.35 + var(--sb)); }
+  #touch-reload-button { right: calc(var(--u) * 0.35 + var(--sr)); bottom: calc(var(--u) * 2.35 + var(--sb)); }
+  #touch-melee-button { right: calc(var(--u) * 1.55 + var(--sr)); bottom: calc(var(--u) * 2.35 + var(--sb)); }
+  #touch-gadget-button { right: calc(var(--u) * 2.75 + var(--sr)); bottom: calc(var(--u) * 1.65 + var(--sb)); }
+  #touch-sprint-button { right: calc(var(--u) * 0.35 + var(--sr)); bottom: calc(var(--u) * 3.55 + var(--sb)); }
+  #touch-hop-button { right: calc(var(--u) * 1.55 + var(--sr)); bottom: calc(var(--u) * 3.55 + var(--sb)); display: none; }
+  body.piloting-drone #touch-hop-button { display: flex; }
+  #touch-plant-button { right: calc(var(--u) * 2.75 + var(--sr)); bottom: calc(var(--u) * 2.85 + var(--sb)); }
+
+  #touch-pause-button {
+    --size: 36px;
+    top: calc(6px + var(--st));
+    right: calc(8px + var(--sr));
+    font-size: 0.7rem;
+  }
+  #touch-utility-row {
+    position: absolute;
+    z-index: 3;
+    top: calc(52px + var(--st));
+    left: calc(10px + var(--sl));
+    display: flex;
+    gap: 6px;
+    pointer-events: none;
+  }
+  .touch-button.pill {
+    position: static;
+    width: auto;
+    height: calc(var(--u) * 0.72);
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 0.55rem;
+  }
+
+  /* HUD relocation on phones — the bottom corners belong to the thumbs. */
+  body.is-mobile #health-hud {
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    bottom: auto;
+    padding: 5px 10px;
+  }
+  body.is-mobile #health-bar-track { width: 90px; }
+  body.is-mobile #ammo-hud {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    padding: 5px 12px;
+    text-align: center;
+  }
+  body.is-mobile #drone-boost-hud, body.is-mobile #drone-jump-hud { justify-content: center; }
+  body.is-mobile #drone-hint { bottom: auto; top: calc(44px + env(safe-area-inset-top, 0px)); max-width: 80vw; font-size: 0.62rem; }
+  body.is-mobile #kill-feed { top: calc(52px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); }
+  body.is-mobile #round-hud { top: calc(6px + env(safe-area-inset-top, 0px)); font-size: 0.72rem; padding: 4px 12px; }
+  body.is-mobile #plant-progress-container { bottom: 120px; }
+
+  /* Menus: shrink to fit short landscape screens and scroll if they still don't. */
+  @media (max-height: 480px), (max-width: 720px) {
+    body.is-mobile #game-title { font-size: 2rem; margin-bottom: 0; }
+    body.is-mobile #game-subtitle { font-size: 0.8rem; margin-bottom: 1em; }
+    body.is-mobile #mode-select-buttons,
+    body.is-mobile #operator-cards { gap: 0.6em; flex-wrap: wrap; justify-content: center; }
+    body.is-mobile .mode-card,
+    body.is-mobile .operator-card { width: 150px; padding: 0.9em 0.6em; }
+    body.is-mobile #main-menu-overlay,
+    body.is-mobile #operator-select-overlay,
+    body.is-mobile #click-to-play-overlay,
+    body.is-mobile #pause-overlay {
+      justify-content: flex-start;
+      overflow-y: auto;
+      padding: 14px 8px;
+    }
+    body.is-mobile #main-menu-overlay > :first-child,
+    body.is-mobile #operator-select-overlay > :first-child,
+    body.is-mobile #click-to-play-overlay > :first-child,
+    body.is-mobile #pause-overlay > :first-child { margin-top: auto; }
+    body.is-mobile #main-menu-overlay > :last-child,
+    body.is-mobile #operator-select-overlay > :last-child,
+    body.is-mobile #click-to-play-overlay > :last-child,
+    body.is-mobile #pause-overlay > :last-child { margin-bottom: auto; }
+  }
+
+  #rotate-device-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #05080c;
+    color: var(--color-neon-cyan);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1em;
+    text-align: center;
+    letter-spacing: 0.1em;
+    padding: 2em;
+  }
+  #rotate-device-glyph { font-size: 3rem; }
+  @media (orientation: portrait) {
+    body.is-mobile #rotate-device-overlay { display: flex; }
+  }
 </style>
 </head>
 <body>
@@ -648,8 +949,22 @@
   <div id="ammo-hud">
     <div id="ammo-counts"><span id="ammo-current">--</span> / <span id="ammo-reserve">--</span></div>
     <div id="ammo-weapon-name">--</div>
+    <div id="drone-jump-hud">
+      <span id="drone-jump-label">Hop</span>
+      <div id="drone-jump-bar-track"><div id="drone-jump-bar-fill"></div></div>
+      <div id="drone-jump-icon" title="Space to hop (1.5s cooldown)" aria-label="Drone hop cooldown">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 4l7 10h-4v6h-6v-6H5l7-10z"/>
+        </svg>
+      </div>
+    </div>
+
     <div id="drone-boost-hud">
       <span id="drone-boost-label">Boost</span>
+      <div id="drone-boost-pips">
+        <div class="drone-boost-pip" id="drone-boost-pip-0"><div class="drone-boost-pip-fill"></div></div>
+        <div class="drone-boost-pip" id="drone-boost-pip-1"><div class="drone-boost-pip-fill"></div></div>
+      </div>
       <div id="drone-boost-icon" title="Hold Shift to boost" aria-label="Drone boost">
         <!-- Simple chevron / thruster glyph -->
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -678,6 +993,37 @@
 
   <!-- Shown only while piloting a drone (spawn scouting or Recon's gadget) -->
   <div id="drone-hint"></div>
+
+  <!-- Touch controls (mobile only; hidden unless body.is-mobile.touch-active) -->
+  <div id="touch-controls">
+    <div id="touch-look-zone"></div>
+    <div id="touch-joystick-zone">
+      <div id="touch-joystick-base"><div id="touch-joystick-nub"></div></div>
+    </div>
+
+    <button class="touch-button" id="touch-pause-button" aria-label="Pause">&#10074;&#10074;</button>
+    <div id="touch-utility-row">
+      <button class="touch-button pill" id="touch-crouch-button">CROUCH</button>
+      <button class="touch-button pill" id="touch-lean-left-button">&#9664; LEAN</button>
+      <button class="touch-button pill" id="touch-lean-right-button">LEAN &#9654;</button>
+      <button class="touch-button pill" id="touch-score-button">INFO</button>
+    </div>
+
+    <button class="touch-button" id="touch-fire-button">FIRE</button>
+    <button class="touch-button" id="touch-aim-button">AIM</button>
+    <button class="touch-button" id="touch-reload-button">RELOAD</button>
+    <button class="touch-button" id="touch-melee-button">MELEE</button>
+    <button class="touch-button" id="touch-gadget-button">GADGET</button>
+    <button class="touch-button" id="touch-sprint-button">SPRINT</button>
+    <button class="touch-button" id="touch-hop-button">HOP</button>
+    <button class="touch-button" id="touch-plant-button">PLANT</button>
+  </div>
+
+  <!-- Shown over everything on a phone held in portrait -->
+  <div id="rotate-device-overlay">
+    <div id="rotate-device-glyph">&#8635;</div>
+    <div>ROTATE YOUR DEVICE TO LANDSCAPE</div>
+  </div>
 
   <!-- Bomb-plant progress bar (shown only while holding G at the site) -->
   <div id="plant-progress-container">
@@ -750,6 +1096,11 @@
       <b>Q / E</b> Lean (toggle) &nbsp;|&nbsp; <b>LMB</b> Fire &nbsp;|&nbsp; <b>RMB</b> Aim &nbsp;|&nbsp; <b>R</b> Reload<br>
       <b>F</b> Gadget &nbsp;|&nbsp; <b>G</b> Plant Bomb &nbsp;|&nbsp; <b>V</b> Melee &nbsp;|&nbsp; <b>Esc</b> Release Cursor
     </div>
+    <div id="controls-hint-mobile">
+      <b>Left thumb</b> Move &nbsp;|&nbsp; <b>Drag anywhere else</b> Look<br>
+      <b>FIRE</b> &nbsp;<b>AIM</b> (toggle) &nbsp;<b>RELOAD</b> &nbsp;<b>MELEE</b> &nbsp;<b>GADGET</b> &nbsp;<b>PLANT</b> (hold)<br>
+      Scouting drone: <b>HOP</b> and <b>SPRINT</b> (boost)
+    </div>
   </div>
 
   <!-- Shown when pointer lock is lost mid-game (Esc pressed) -->
@@ -786,6 +1137,23 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 
+// ========== PLATFORM DETECTION ==========
+// Mobile = a touch device whose primary pointer is coarse (a finger, not a
+// mouse/trackpad), or a phone/tablet user agent (iPadOS reports itself as
+// a Mac, so it's caught via touch points). Adding ?mobile=1 to the URL
+// forces mobile mode on any device, handy for testing the touch layout on
+// a desktop — the touch controls use pointer events, so a mouse can drive them.
+const isMobileDevice = (() => {
+  const forced = new URLSearchParams(window.location.search).has('mobile');
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  const mobileUserAgent =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return forced || (hasTouch && coarsePointer) || mobileUserAgent;
+})();
+if (isMobileDevice) document.body.classList.add('is-mobile');
+
 // ========== CONFIG & CONSTANTS ==========
 // Centralized tunables so later steps (weapons, movement) can reference
 // a single source of truth instead of magic numbers scattered in code.
@@ -801,7 +1169,7 @@ const CONFIG = {
   AMBIENT_INTENSITY: 0.65,
   SUN_INTENSITY: 2.2,
   HEMI_INTENSITY: 0.55,
-  SHADOW_MAP_SIZE: 2048,
+  SHADOW_MAP_SIZE: isMobileDevice ? 1024 : 2048, // lighter shadow map on phones
   PLAYER_EYE_HEIGHT: 1.7,
   CROUCH_EYE_HEIGHT: 1.2,
   PLAYER_MAX_HEALTH: 100,
@@ -817,11 +1185,14 @@ const CONFIG = {
   LEAN_OFFSET: 0.35, // sideways camera shift while leaning, in local units
   LEAN_SPEED: 8, // lerp rate toward the target lean amount
   DRONE_SPEED: 4, // units/sec the drone flies at while piloted
-  DRONE_SPRINT_MULTIPLIER: 1.9, // speed boost while holding Shift as the drone
+  DRONE_SPRINT_MULTIPLIER: 1.25, // speed boost while holding Shift as the drone — only slightly faster than normal flight
   DRONE_JUMP_IMPULSE: 3.2, // upward velocity applied on a drone "hop" (Space)
+  DRONE_JUMP_COOLDOWN: 1.5, // seconds before another hop is allowed
   DRONE_GRAVITY: -9, // pulls a hopping drone back down to its hover height
   DRONE_HOVER_HEIGHT: 0.3, // how high above the floor beneath it the drone rests
   DRONE_RADIUS: 0.2, // horizontal collision half-width for the drone
+  DRONE_BOOST_MAX_CHARGES: 2, // how many boost charges the drone can hold at once
+  DRONE_BOOST_CHARGE_DURATION: 2.5, // seconds of boost held in a single charge
   WEAPON: {
     RANGE: 400, // effectively "until it hits a wall" — just under the camera's far clip plane
     RECOIL_KICK: 0.018, // radians added to pitch per shot
@@ -903,7 +1274,7 @@ const canvas = document.getElementById('game-canvas');
 
 // Renderer: antialiasing + soft shadows per the low-poly art direction spec.
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobileDevice ? 1.5 : 2)); // cap resolution on phones for frame rate
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -1020,8 +1391,29 @@ const pauseOverlay = document.getElementById('pause-overlay');
 
 let pointerIsLocked = false;
 
+// Starts gameplay input: the real Pointer Lock API on desktop, or simply
+// flipping the "game is active" flag on mobile (touch screens have no
+// cursor to capture) — see setMobileGameActive() in the Mobile Controls
+// section. Both end up setting pointerIsLocked, the master gate that
+// every per-frame update checks.
 function requestGameLock() {
+  if (isMobileDevice) {
+    setMobileGameActive(true);
+    return;
+  }
   canvas.requestPointerLock();
+}
+
+// Counterpart to requestGameLock(): stops gameplay input (used when a
+// round ends). On desktop that's releasing the pointer lock, which fires
+// onPointerLockChange and shows the pause overlay; on mobile it's the
+// equivalent state change done directly.
+function releaseGameLock() {
+  if (isMobileDevice) {
+    setMobileGameActive(false);
+  } else if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
 }
 
 function onPointerLockChange() {
@@ -1134,10 +1526,11 @@ let lookPitch = 0;
 let droneYaw = 0;
 let dronePitch = 0;
 
-function onMouseMove(event) {
+// Applies a look delta (in pixels) to whichever view is active — the drone
+// camera while piloting, otherwise the player's yaw/pitch. Shared by mouse
+// movement (desktop) and the touch look zone (mobile).
+function applyLookDelta(movementX, movementY) {
   if (!pointerIsLocked) return;
-  const movementX = event.movementX || 0;
-  const movementY = event.movementY || 0;
 
   // Aiming down sights halves mouse sensitivity, per the R6-style ADS spec.
   const sensitivity = mouseSensitivity * (isAiming ? CONFIG.WEAPON.ADS_SENSITIVITY_MULTIPLIER : 1);
@@ -1158,6 +1551,11 @@ function onMouseMove(event) {
   const pitchDelta = movementY * sensitivity * (invertY ? -1 : 1);
   lookPitch -= pitchDelta;
   lookPitch = Math.max(-CONFIG.MAX_PITCH, Math.min(CONFIG.MAX_PITCH, lookPitch));
+}
+
+function onMouseMove(event) {
+  if (isMobileDevice) return; // touch look handles aiming on mobile
+  applyLookDelta(event.movementX || 0, event.movementY || 0);
 }
 document.addEventListener('mousemove', onMouseMove);
 
@@ -1809,12 +2207,13 @@ function updateWeaponRecoil(deltaTime) {
 }
 
 function onMouseDown(event) {
-  if (!pointerIsLocked) return;
+  if (isMobileDevice || !pointerIsLocked) return; // taps would otherwise fire synthetic mouse events
   if (event.button === 0) isFiring = true;
   // Don't ADS over an active knife swing.
   if (event.button === 2 && meleeAnimTimeRemaining <= 0) isAiming = true;
 }
 function onMouseUp(event) {
+  if (isMobileDevice) return;
   if (event.button === 0) isFiring = false;
   if (event.button === 2) isAiming = false;
 }
@@ -2703,6 +3102,7 @@ let droneMesh = null;
 let droneCamera = null;
 let droneMode = null; // null | 'spawn' (attacker scouting phase) | 'recon' (Recon's gadget)
 let droneVerticalVelocity = 0;
+let droneJumpCooldownRemaining = 0;
 let isDroneGrounded = false;
 const droneGroundRaycaster = new THREE.Raycaster();
 const droneBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, flatShading: true, roughness: 0.4, metalness: 0.4 });
@@ -2835,7 +3235,7 @@ function endRound(result) {
   if (roundPhase === 'over') return;
   roundPhase = 'over';
   roundResult = result;
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseGameLock();
   roundResultTitleEl.textContent = result === 'attackers' ? 'ATTACKERS WIN' : 'DEFENDERS WIN';
   roundResultTitleEl.className = result === 'attackers' ? 'win' : 'lose';
   roundOverOverlay.classList.add('visible');
@@ -3143,14 +3543,22 @@ function deployDrone(position, yaw, pitch, mode) {
   scene.add(droneCamera);
 
   droneVerticalVelocity = 0;
+  droneJumpCooldownRemaining = 0;
   isDroneGrounded = false;
   droneMode = mode;
   isDroneDeployed = true;
   isPilotingDrone = true;
+  resetDroneBoost();
   droneHintEl.classList.add('visible');
-  droneHintEl.textContent = mode === 'spawn'
-    ? 'SCOUTING — WASD Fly · Space Hop · Shift Boost · Deploying automatically when prep ends'
-    : 'RECON DRONE — WASD Fly · Space Hop · Shift Boost · F Return';
+  if (isMobileDevice) {
+    droneHintEl.textContent = mode === 'spawn'
+      ? 'SCOUTING — Joystick Fly · HOP · BOOST · Deploying automatically when prep ends'
+      : 'RECON DRONE — Joystick Fly · HOP · BOOST · GADGET to return';
+  } else {
+    droneHintEl.textContent = mode === 'spawn'
+      ? 'SCOUTING — WASD Fly · Space Hop · Shift Boost · Deploying automatically when prep ends'
+      : 'RECON DRONE — WASD Fly · Space Hop · Shift Boost · F Return';
+  }
 }
 
 // Recon: deploys the drone and immediately pilots it; pressing F again
@@ -3197,9 +3605,43 @@ function despawnDrone() {
   droneHintEl.classList.remove('visible');
 }
 
+// ---- Drone boost resource ----
+// 2 charges, each a 2.5-second meter. Holding Shift drains the frontmost
+// (first non-empty) charge; letting go just pauses it right where it is —
+// it does NOT reset to empty, so releasing early doesn't waste the rest
+// of that charge. Boosting again resumes draining the same charge from
+// that same point, until it eventually hits 0 and is spent for good.
+// Spent charges do NOT regenerate on their own — once both are empty,
+// boost stays unavailable until the drone itself is redeployed (a fresh
+// scouting phase or a fresh use of Recon's gadget), which is the only
+// thing that refills the meter — see resetDroneBoost().
+let droneBoostCharges = new Array(CONFIG.DRONE_BOOST_MAX_CHARGES).fill(CONFIG.DRONE_BOOST_CHARGE_DURATION);
+
+// Resets the boost meter to full — called whenever a drone is freshly deployed.
+function resetDroneBoost() {
+  droneBoostCharges = new Array(CONFIG.DRONE_BOOST_MAX_CHARGES).fill(CONFIG.DRONE_BOOST_CHARGE_DURATION);
+}
+
+function isDroneBoostAvailable() {
+  return droneBoostCharges.some((charge) => charge > 0);
+}
+
+// Drains the boost meter for one frame. wantsBoost is the raw Shift-held
+// state — while held, the frontmost charge drains; while released, it
+// simply stops changing (paused, not reset, and never regenerates on its
+// own) until you boost again.
+function updateDroneBoostResource(deltaTime, wantsBoost) {
+  const activeIndex = droneBoostCharges.findIndex((charge) => charge > 0);
+
+  if (wantsBoost && activeIndex !== -1) {
+    droneBoostCharges[activeIndex] = Math.max(0, droneBoostCharges[activeIndex] - deltaTime);
+  }
+}
+
 // Moves the drone horizontally with WASD (relative to where it's looking,
-// Shift to boost), colliding with walls exactly like the player does, and
-// separately handles its vertical hop/gravity — see updateDroneVertical().
+// Shift to boost, limited by the boost meter above), colliding with walls
+// exactly like the player does, and separately handles its vertical
+// hop/gravity — see updateDroneVertical().
 function updateDroneMovement(deltaTime) {
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(droneCamera.quaternion);
   const right = new THREE.Vector3(1, 0, 0).applyQuaternion(droneCamera.quaternion);
@@ -3214,7 +3656,9 @@ function updateDroneMovement(deltaTime) {
   if (keys['KeyD']) moveDirection.add(right);
   if (keys['KeyA']) moveDirection.sub(right);
 
-  const isSprinting = !!keys['ShiftLeft'] || !!keys['ShiftRight'];
+  const wantsBoost = !!keys['ShiftLeft'] || !!keys['ShiftRight'];
+  const isSprinting = wantsBoost && isDroneBoostAvailable();
+  updateDroneBoostResource(deltaTime, wantsBoost);
   const speed = CONFIG.DRONE_SPEED * (isSprinting ? CONFIG.DRONE_SPRINT_MULTIPLIER : 1);
 
   if (moveDirection.lengthSq() > 0) {
@@ -3260,8 +3704,13 @@ function resolveDroneHorizontalMovement(deltaX, deltaZ) {
 
 // Finds the floor beneath the drone (so it hovers correctly on whichever
 // story it's currently over), applies gravity, and lets it "hop" off that
-// floor on Space — the recon drone's signature little jump over ledges.
+// floor on Space (on a DRONE_JUMP_COOLDOWN-second cooldown) — the recon
+// drone's signature little jump over ledges.
 function updateDroneVertical(deltaTime) {
+  if (droneJumpCooldownRemaining > 0) {
+    droneJumpCooldownRemaining = Math.max(0, droneJumpCooldownRemaining - deltaTime);
+  }
+
   const probeOrigin = droneCamera.position.clone();
   probeOrigin.y += 1.0;
   droneGroundRaycaster.set(probeOrigin, DOWN_VECTOR);
@@ -3281,9 +3730,10 @@ function updateDroneVertical(deltaTime) {
     isDroneGrounded = false;
   }
 
-  if (keys['Space'] && isDroneGrounded) {
+  if (keys['Space'] && isDroneGrounded && droneJumpCooldownRemaining <= 0) {
     droneVerticalVelocity = CONFIG.DRONE_JUMP_IMPULSE;
     isDroneGrounded = false;
+    droneJumpCooldownRemaining = CONFIG.DRONE_JUMP_COOLDOWN;
   }
 }
 
@@ -3318,6 +3768,12 @@ function resetRound() {
   bombFuseRemaining = 0;
   defuseProgress = 0;
 
+  // Don't carry stances or held inputs into the next round.
+  isCrouchToggled = false;
+  leanDirection = 0;
+  isAiming = false;
+  isFiring = false;
+
   removeShield();
   despawnDrone();
   meleeAnimTimeRemaining = 0;
@@ -3327,6 +3783,252 @@ function resetRound() {
 }
 
 document.getElementById('round-restart-button').addEventListener('click', resetRound);
+
+// ========== MOBILE CONTROLS ==========
+// Touch layer for phones/tablets. It deliberately doesn't add a second
+// gameplay path — it drives the same state the keyboard and mouse do:
+//   - the joystick sets the WASD entries of `keys`,
+//   - dragging anywhere else feeds applyLookDelta() (the same function
+//     mouse movement uses),
+//   - the buttons set isFiring / isAiming / held keys, or call the same
+//     action functions the keys call (useMelee, useGadget, startReload).
+// Everything is built on pointer events so multiple fingers (move + look +
+// fire at once) work independently, each tracked by its pointerId.
+
+const TOUCH_LOOK_MULTIPLIER = 1.7; // touch drags need more rotation per pixel than a mouse
+const JOYSTICK_RADIUS = 52; // px the nub can travel from its origin
+const JOYSTICK_DEADZONE = 0.22; // fraction of the radius ignored as noise
+const JOYSTICK_AXIS_THRESHOLD = 0.35; // how far along an axis counts as pressing that direction
+const TOUCH_HELD_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'Space', 'KeyR', 'KeyG'];
+
+// Turns gameplay on/off for mobile. This is the mobile stand-in for the
+// Pointer Lock API (see requestGameLock/releaseGameLock): it flips
+// pointerIsLocked, the master gate for every per-frame update, and shows
+// or hides the touch controls and pause overlay to match.
+function setMobileGameActive(active) {
+  pointerIsLocked = active;
+  document.body.classList.toggle('touch-active', active);
+  if (active) {
+    clickToPlayOverlay.classList.add('hidden');
+    pauseOverlay.classList.remove('visible');
+    enterMobileFullscreen();
+  } else {
+    releaseAllTouchInputs();
+    // Same rule as desktop: the pause overlay only appears once the very
+    // first "Tap to Play" screen has been dismissed.
+    if (clickToPlayOverlay.classList.contains('hidden')) pauseOverlay.classList.add('visible');
+  }
+}
+
+// Best-effort fullscreen + landscape lock, which hides the browser chrome
+// and gives the controls more room. Unsupported on iPhone Safari and
+// blocked in some embedded frames — all of which are fine, so every
+// failure is swallowed.
+function enterMobileFullscreen() {
+  try {
+    const root = document.documentElement;
+    if (!document.fullscreenElement && root.requestFullscreen) {
+      root.requestFullscreen()
+        .then(() => {
+          if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+        })
+        .catch(() => {});
+    }
+  } catch (error) {
+    // Fullscreen isn't available here; the game works without it.
+  }
+}
+
+// Clears every held touch input — called when pausing or ending a round so
+// a finger that was mid-press can't leave the player firing or walking.
+function releaseAllTouchInputs() {
+  isFiring = false;
+  isAiming = false;
+  for (const code of TOUCH_HELD_KEYS) keys[code] = false;
+  joystickPointerId = null;
+  lookPointerId = null;
+  resetJoystickVisual();
+  document.querySelectorAll('#touch-controls .touch-button.pressed').forEach((button) => button.classList.remove('pressed'));
+}
+
+// ---- Virtual joystick (floating: appears wherever the left thumb lands) ----
+const joystickZoneEl = document.getElementById('touch-joystick-zone');
+const joystickBaseEl = document.getElementById('touch-joystick-base');
+const joystickNubEl = document.getElementById('touch-joystick-nub');
+let joystickPointerId = null;
+let joystickOrigin = { x: 0, y: 0 };
+let lookPointerId = null; // the finger currently dragging the view, if any
+
+function resetJoystickVisual() {
+  joystickBaseEl.classList.remove('active');
+  joystickBaseEl.style.left = '';
+  joystickBaseEl.style.top = '';
+  joystickNubEl.style.transform = '';
+  for (const code of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) keys[code] = false;
+}
+
+// nx/ny are the nub's offset as a fraction of the radius (-1..1; +x right,
+// +y down). Converted to W/A/S/D presses so the existing movement code,
+// the ladder, and the drone all just work.
+function setJoystickKeys(nx, ny) {
+  const active = Math.hypot(nx, ny) > JOYSTICK_DEADZONE;
+  keys['KeyW'] = active && ny < -JOYSTICK_AXIS_THRESHOLD;
+  keys['KeyS'] = active && ny > JOYSTICK_AXIS_THRESHOLD;
+  keys['KeyD'] = active && nx > JOYSTICK_AXIS_THRESHOLD;
+  keys['KeyA'] = active && nx < -JOYSTICK_AXIS_THRESHOLD;
+}
+
+// Mobile-only wiring, run once at load. Every listener below is attached
+// only on mobile, so none of it exists on the desktop code path.
+function initMobileControls() {
+  document.querySelector('#click-to-play-overlay .prompt-box').textContent = 'Tap to Play';
+  document.getElementById('resume-prompt').textContent = 'Tap to Resume';
+
+  // Stop the browser from hijacking touches for zoom, scroll, or menus.
+  document.addEventListener('gesturestart', (event) => event.preventDefault());
+  document.addEventListener('contextmenu', (event) => event.preventDefault());
+  document.addEventListener(
+    'touchmove',
+    (event) => {
+      if (document.body.classList.contains('touch-active')) event.preventDefault();
+    },
+    { passive: false }
+  );
+
+  // --- Joystick ---
+  joystickZoneEl.addEventListener('pointerdown', (event) => {
+    if (joystickPointerId !== null) return;
+    event.preventDefault();
+    joystickPointerId = event.pointerId;
+    joystickZoneEl.setPointerCapture(event.pointerId);
+    joystickOrigin = { x: event.clientX, y: event.clientY };
+    const rect = joystickZoneEl.getBoundingClientRect();
+    joystickBaseEl.style.left = `${event.clientX - rect.left}px`;
+    joystickBaseEl.style.top = `${event.clientY - rect.top}px`;
+    joystickBaseEl.classList.add('active');
+    joystickNubEl.style.transform = 'translate(0px, 0px)';
+  });
+  joystickZoneEl.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== joystickPointerId) return;
+    let dx = event.clientX - joystickOrigin.x;
+    let dy = event.clientY - joystickOrigin.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > JOYSTICK_RADIUS) {
+      dx = (dx / distance) * JOYSTICK_RADIUS;
+      dy = (dy / distance) * JOYSTICK_RADIUS;
+    }
+    joystickNubEl.style.transform = `translate(${dx}px, ${dy}px)`;
+    setJoystickKeys(dx / JOYSTICK_RADIUS, dy / JOYSTICK_RADIUS);
+  });
+  const endJoystick = (event) => {
+    if (event.pointerId !== joystickPointerId) return;
+    joystickPointerId = null;
+    resetJoystickVisual();
+  };
+  joystickZoneEl.addEventListener('pointerup', endJoystick);
+  joystickZoneEl.addEventListener('pointercancel', endJoystick);
+  joystickZoneEl.addEventListener('lostpointercapture', endJoystick);
+
+  // --- Look (drag anywhere not covered by the joystick or a button) ---
+  const lookZoneEl = document.getElementById('touch-look-zone');
+  let lastLook = { x: 0, y: 0 };
+  lookZoneEl.addEventListener('pointerdown', (event) => {
+    if (lookPointerId !== null) return;
+    event.preventDefault();
+    lookPointerId = event.pointerId;
+    lastLook = { x: event.clientX, y: event.clientY };
+    lookZoneEl.setPointerCapture(event.pointerId);
+  });
+  lookZoneEl.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== lookPointerId) return;
+    const dx = event.clientX - lastLook.x;
+    const dy = event.clientY - lastLook.y;
+    lastLook = { x: event.clientX, y: event.clientY };
+    applyLookDelta(dx * TOUCH_LOOK_MULTIPLIER, dy * TOUCH_LOOK_MULTIPLIER);
+  });
+  const endLook = (event) => {
+    if (event.pointerId === lookPointerId) lookPointerId = null;
+  };
+  lookZoneEl.addEventListener('pointerup', endLook);
+  lookZoneEl.addEventListener('pointercancel', endLook);
+  lookZoneEl.addEventListener('lostpointercapture', endLook);
+
+  // --- Buttons ---
+  // Each button can supply `down` (finger lands) and/or `up` (finger lifts).
+  // The 'pressed' class doubles as a guard so `up` runs exactly once even
+  // though pointerup, pointercancel, and lostpointercapture can all fire.
+  function bindTouchButton(id, { down, up }) {
+    const button = document.getElementById(id);
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      button.setPointerCapture(event.pointerId);
+      button.classList.add('pressed');
+      if (down) down();
+    });
+    const release = () => {
+      if (!button.classList.contains('pressed')) return;
+      button.classList.remove('pressed');
+      if (up) up();
+    };
+    button.addEventListener('pointerup', release);
+    button.addEventListener('pointercancel', release);
+    button.addEventListener('lostpointercapture', release);
+  }
+
+  bindTouchButton('touch-fire-button', {
+    down: () => { isFiring = true; },
+    up: () => { isFiring = false; },
+  });
+  // Aim is a toggle on mobile (holding a thumb on it while also firing and
+  // looking isn't practical). It won't engage mid-knife-swing, like RMB.
+  bindTouchButton('touch-aim-button', {
+    down: () => {
+      if (isAiming) isAiming = false;
+      else if (meleeAnimTimeRemaining <= 0) isAiming = true;
+    },
+  });
+  bindTouchButton('touch-reload-button', { down: () => { if (!isPilotingDrone) startReload(); } });
+  bindTouchButton('touch-melee-button', { down: () => useMelee() });
+  bindTouchButton('touch-gadget-button', { down: () => useGadget() });
+  bindTouchButton('touch-sprint-button', {
+    down: () => { keys['ShiftLeft'] = true; }, // sprint on foot, boost as the drone
+    up: () => { keys['ShiftLeft'] = false; },
+  });
+  bindTouchButton('touch-hop-button', {
+    down: () => { keys['Space'] = true; },
+    up: () => { keys['Space'] = false; },
+  });
+  bindTouchButton('touch-plant-button', {
+    down: () => { keys['KeyG'] = true; },
+    up: () => { keys['KeyG'] = false; },
+  });
+  bindTouchButton('touch-crouch-button', { down: () => { isCrouchToggled = !isCrouchToggled; } });
+  bindTouchButton('touch-lean-left-button', { down: () => { leanDirection = leanDirection === -1 ? 0 : -1; } });
+  bindTouchButton('touch-lean-right-button', { down: () => { leanDirection = leanDirection === 1 ? 0 : 1; } });
+  bindTouchButton('touch-score-button', { down: () => scoreboardEl.classList.toggle('visible') });
+  bindTouchButton('touch-pause-button', { down: () => setMobileGameActive(false) });
+}
+
+if (isMobileDevice) initMobileControls();
+
+const touchGadgetButtonEl = document.getElementById('touch-gadget-button');
+const touchToggleButtons = [
+  [document.getElementById('touch-aim-button'), () => isAiming],
+  [document.getElementById('touch-crouch-button'), () => isCrouchToggled],
+  [document.getElementById('touch-lean-left-button'), () => leanDirection === -1],
+  [document.getElementById('touch-lean-right-button'), () => leanDirection === 1],
+];
+const TOUCH_GADGET_LABELS = { breach: 'BREACH', shield: 'SHIELD', drone: 'DRONE' };
+
+// Keeps the touch UI in step with game state each frame: toggle buttons
+// light up while their state is on, the HOP button only appears while
+// piloting a drone, and the gadget button is labeled for the current operator.
+function updateTouchControlsUI() {
+  document.body.classList.toggle('piloting-drone', isPilotingDrone);
+  for (const [button, isOn] of touchToggleButtons) button.classList.toggle('on', isOn());
+  const label = TOUCH_GADGET_LABELS[getProfile().gadget] || 'GADGET';
+  if (touchGadgetButtonEl.textContent !== label) touchGadgetButtonEl.textContent = label;
+}
 
 // ========== GAME LOOP ==========
 // Single requestAnimationFrame loop driven by THREE.Clock for
@@ -3346,6 +4048,9 @@ const ammoCurrentEl = document.getElementById('ammo-current');
 const ammoReserveEl = document.getElementById('ammo-reserve');
 const ammoWeaponNameEl = document.getElementById('ammo-weapon-name');
 const droneBoostHudEl = document.getElementById('drone-boost-hud');
+const droneBoostPipFillEls = [0, 1].map((i) => document.querySelector(`#drone-boost-pip-${i} .drone-boost-pip-fill`));
+const droneJumpHudEl = document.getElementById('drone-jump-hud');
+const droneJumpBarFillEl = document.getElementById('drone-jump-bar-fill');
 const gadgetStatusEl = document.getElementById('gadget-status');
 const reloadHintEl = document.getElementById('reload-hint');
 const killFeedEl = document.getElementById('kill-feed');
@@ -3415,12 +4120,25 @@ function updateHud() {
 
   ammoHudEl.classList.toggle('drone-phase', isPilotingDrone);
   if (isPilotingDrone) {
-    const isBoosting = !!keys['ShiftLeft'] || !!keys['ShiftRight'];
-    droneBoostHudEl.classList.toggle('active', isBoosting);
+    const wantsBoost = !!keys['ShiftLeft'] || !!keys['ShiftRight'];
+    const boostAvailable = isDroneBoostAvailable();
+    droneBoostHudEl.classList.toggle('active', wantsBoost && boostAvailable);
+    droneBoostHudEl.classList.toggle('depleted', !boostAvailable);
+    for (let i = 0; i < droneBoostCharges.length; i++) {
+      const fraction = droneBoostCharges[i] / CONFIG.DRONE_BOOST_CHARGE_DURATION;
+      droneBoostPipFillEls[i].style.width = `${Math.round(fraction * 100)}%`;
+      droneBoostPipFillEls[i].style.background = fraction > 0 ? 'var(--color-neon-cyan)' : '#552222';
+    }
+    // Hop cooldown: the bar fills back up as the 1.5s cooldown elapses and
+    // the icon lights up cyan once a hop is available again.
+    const hopProgress = 1 - droneJumpCooldownRemaining / CONFIG.DRONE_JUMP_COOLDOWN;
+    droneJumpBarFillEl.style.width = `${Math.round(Math.max(0, Math.min(1, hopProgress)) * 100)}%`;
+    droneJumpBarFillEl.style.background = hopProgress >= 1 ? 'var(--color-neon-cyan)' : '#887733';
+    droneJumpHudEl.classList.toggle('ready', hopProgress >= 1);
     gadgetStatusEl.textContent = droneMode === 'spawn' ? 'SCOUTING DRONE' : getGadgetStatusText();
     reloadHintEl.textContent = '';
   } else {
-    droneBoostHudEl.classList.remove('active');
+    droneBoostHudEl.classList.remove('active', 'depleted');
     ammoCurrentEl.textContent = String(currentAmmo);
     ammoReserveEl.textContent = String(reserveAmmo);
     ammoWeaponNameEl.textContent = getProfile().weaponName || currentOperator.toUpperCase();
@@ -3491,6 +4209,7 @@ function animate() {
   }
 
   updateHud();
+  if (isMobileDevice) updateTouchControlsUI();
   updateRoundHud();
   updatePlantProgressUI();
 
